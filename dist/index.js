@@ -10079,7 +10079,7 @@ async function run() {
 function checkIsEn(body) {
   const result = franc(body);
   if (result === 'und' || result === undefined || result === null) {
-    core.warning(`Some error. Can not check! [${body}]`);
+    core.warning(`Some error. [check: ${check}] [${body}]`);
     return false;
   }
   core.info(`[CheckIsEn] [${body} is ${result}]`);
