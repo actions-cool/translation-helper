@@ -26,6 +26,12 @@ jobs:
       - uses: actions-cool/translation-helper@v1.0.0
 ```
 
+| Name | Desc | Type | Required |
+| -- | -- | -- | -- |
+| token | GitHub token | string | ✖ |
+| translate-title | If translate title. Default `true`. | boolean | ✖ |
+| translate-body | If translate body. Default `true`. | boolean | ✖ |
+
 ## ⚡ Feedback
 
 You are very welcome to try it out and put forward your comments. You can use the following methods:

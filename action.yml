@@ -14,6 +14,10 @@ inputs:
     description: Secret GitHub API token to use for making API requests.
     default: ${{ github.token }}
     required: true
+  translate-title:
+    description: If translate title. Default true.
+  translate-body:
+    description: If translate body. Default true.
 
 runs:
   using: 'node12'
