@@ -8,7 +8,7 @@ A GitHub Action keep your issue or PR in line with international standards.
 
 Currently, only translations of newly opened issues or PRs have been produced, and comments have not been translated. If you need it, you can bring it up and I will improve it if you have time.
 
-## How to ues?
+## 🚀 How to ues?
 
 ```yml
 name: Translation Helper
