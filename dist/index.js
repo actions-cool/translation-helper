@@ -1214,6 +1214,443 @@ exports.checkBypass = checkBypass;
 
 /***/ }),
 
+/***/ 5178:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const languages = __nccwpck_require__(3051);
+const tokenGenerator = __nccwpck_require__(7029);
+const querystring = __nccwpck_require__(1191);
+const got = __nccwpck_require__(3061);
+
+/**
+ * @function translate
+ * @param {String} text The text to be translated.
+ * @param {Object} options The options object for the translator.
+ * @returns {Object} The result containing the translation.
+ */
+async function translate(text, options) {
+    try {
+        if (typeof options !== "object") options = {};
+        text = String(text);
+
+        // Check if a lanugage is in supported; if not, throw an error object.
+        let error;
+        [ options.from, options.to ].forEach((lang) => {
+            if (lang && !languages.isSupported(lang)) {
+                error = new Error();
+                error.code = 400;
+                error.message = `The language '${lang}' is not supported.`;
+            }
+        });
+        if (error) throw error;
+
+        // If options object doesn"t have "from" language, set it to "auto".
+        if (!Object.prototype.hasOwnProperty.call(options, "from")) options.from = "auto";
+        // If options object doesn"t have "to" language, set it to "en".
+        if (!Object.prototype.hasOwnProperty.call(options, "to")) options.to = "en";
+        // If options object has a "raw" property evaluating to true, set it to true.
+        options.raw = Boolean(options.raw);
+
+        // Get ISO 639-1 codes for the languages.
+        options.from = languages.getISOCode(options.from);
+        options.to = languages.getISOCode(options.to);
+
+        // Generate Google Translate token for the text to be translated.
+        let token = await tokenGenerator.generate(text);
+
+        // URL & query string required by Google Translate.
+        let baseUrl = "https://translate.google.com/translate_a/single";
+        let data = {
+            client: "gtx",
+            sl: options.from,
+            tl: options.to,
+            hl: options.to,
+            dt: [ "at", "bd", "ex", "ld", "md", "qca", "rw", "rm", "ss", "t" ],
+            ie: "UTF-8",
+            oe: "UTF-8",
+            otf: 1,
+            ssel: 0,
+            tsel: 0,
+            kc: 7,
+            q: text,
+            [token.name]: token.value
+        };
+
+        // Append query string to the request URL.
+        let url = `${baseUrl}?${querystring.stringify(data)}`;
+
+        let requestOptions;
+        // If request URL is greater than 2048 characters, use POST method.
+        if (url.length > 2048) {
+            delete data.q;
+            requestOptions = [
+                `${baseUrl}?${querystring.stringify(data)}`,
+                {
+                    method: "POST",
+                    form: {
+                        q: text
+                    }
+                }
+            ];
+        }
+        else {
+            requestOptions = [ url ];
+        }
+
+        // Request translation from Google Translate.
+        let response = await got(...requestOptions);
+
+        let result = {
+            text: "",
+            from: {
+                language: {
+                    didYouMean: false,
+                    iso: ""
+                },
+                text: {
+                    autoCorrected: false,
+                    value: "",
+                    didYouMean: false
+                }
+            },
+            raw: ""
+        };
+
+        // If user requested a raw output, add the raw response to the result
+        if (options.raw) {
+            result.raw = response.body;
+        }
+
+        // Parse string body to JSON and add it to result object.
+
+        let body = JSON.parse(response.body);
+        body[0].forEach((obj) => {
+            if (obj[0]) {
+                result.text += obj[0];
+            }
+        });
+
+        if (body[2] === body[8][0][0]) {
+            result.from.language.iso = body[2];
+        }
+        else {
+            result.from.language.didYouMean = true;
+            result.from.language.iso = body[8][0][0];
+        }
+
+        if (body[7] && body[7][0]) {
+            let str = body[7][0];
+
+            str = str.replace(/<b><i>/g, "[");
+            str = str.replace(/<\/i><\/b>/g, "]");
+
+            result.from.text.value = str;
+
+            if (body[7][5] === true) {
+                result.from.text.autoCorrected = true;
+            }
+            else {
+                result.from.text.didYouMean = true;
+            }
+        }
+
+        return result;
+    }
+    catch (e) {
+        if (e.name === "HTTPError") {
+            let error = new Error();
+            error.name = e.name;
+            error.statusCode = e.statusCode;
+            error.statusMessage = e.statusMessage;
+            throw error;
+        }
+        throw e;
+    }
+}
+
+module.exports = translate;
+module.exports.languages = languages;
+
+
+/***/ }),
+
+/***/ 3051:
+/***/ ((module) => {
+
+/**
+ * Generated from https://translate.google.com
+ *
+ * The languages that Google Translate supports (as of 7/5/2020) alongside
+ * their ISO 639-1 codes
+ * @see https://cloud.google.com/translate/docs/languages
+ * @see https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
+ */
+
+const languages = {
+    "auto": "Automatic",
+    "af": "Afrikaans",
+    "sq": "Albanian",
+    "am": "Amharic",
+    "ar": "Arabic",
+    "hy": "Armenian",
+    "az": "Azerbaijani",
+    "eu": "Basque",
+    "be": "Belarusian",
+    "bn": "Bengali",
+    "bs": "Bosnian",
+    "bg": "Bulgarian",
+    "ca": "Catalan",
+    "ceb": "Cebuano",
+    "ny": "Chichewa",
+    "zh-cn": "Chinese Simplified",
+    "zh-tw": "Chinese Traditional",
+    "co": "Corsican",
+    "hr": "Croatian",
+    "cs": "Czech",
+    "da": "Danish",
+    "nl": "Dutch",
+    "en": "English",
+    "eo": "Esperanto",
+    "et": "Estonian",
+    "tl": "Filipino",
+    "fi": "Finnish",
+    "fr": "French",
+    "fy": "Frisian",
+    "gl": "Galician",
+    "ka": "Georgian",
+    "de": "German",
+    "el": "Greek",
+    "gu": "Gujarati",
+    "ht": "Haitian Creole",
+    "ha": "Hausa",
+    "haw": "Hawaiian",
+    "iw": "Hebrew",
+    "hi": "Hindi",
+    "hmn": "Hmong",
+    "hu": "Hungarian",
+    "is": "Icelandic",
+    "ig": "Igbo",
+    "id": "Indonesian",
+    "ga": "Irish",
+    "it": "Italian",
+    "ja": "Japanese",
+    "jw": "Javanese",
+    "kn": "Kannada",
+    "kk": "Kazakh",
+    "km": "Khmer",
+    "ko": "Korean",
+    "ku": "Kurdish (Kurmanji)",
+    "ky": "Kyrgyz",
+    "lo": "Lao",
+    "la": "Latin",
+    "lv": "Latvian",
+    "lt": "Lithuanian",
+    "lb": "Luxembourgish",
+    "mk": "Macedonian",
+    "mg": "Malagasy",
+    "ms": "Malay",
+    "ml": "Malayalam",
+    "mt": "Maltese",
+    "mi": "Maori",
+    "mr": "Marathi",
+    "mn": "Mongolian",
+    "my": "Myanmar (Burmese)",
+    "ne": "Nepali",
+    "no": "Norwegian",
+    "ps": "Pashto",
+    "fa": "Persian",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "pa": "Punjabi",
+    "ro": "Romanian",
+    "ru": "Russian",
+    "sm": "Samoan",
+    "gd": "Scots Gaelic",
+    "sr": "Serbian",
+    "st": "Sesotho",
+    "sn": "Shona",
+    "sd": "Sindhi",
+    "si": "Sinhala",
+    "sk": "Slovak",
+    "sl": "Slovenian",
+    "so": "Somali",
+    "es": "Spanish",
+    "su": "Sundanese",
+    "sw": "Swahili",
+    "sv": "Swedish",
+    "tg": "Tajik",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "th": "Thai",
+    "tr": "Turkish",
+    "uk": "Ukrainian",
+    "ur": "Urdu",
+    "uz": "Uzbek",
+    "vi": "Vietnamese",
+    "cy": "Welsh",
+    "xh": "Xhosa",
+    "yi": "Yiddish",
+    "yo": "Yoruba",
+    "zu": "Zulu"
+};
+
+/**
+ * Returns the ISO 639-1 code of the desiredLang – if it is supported by
+ * Google Translate
+ * @param {string} language The name or the code of the desired language
+ * @returns {string|boolean} The ISO 639-1 code of the language or null if the
+ * language is not supported
+ */
+function getISOCode(language) {
+    if (!language) return false;
+    language = language.toLowerCase();
+    if (language in languages) return language;
+
+    let keys = Object.keys(languages).filter((key) => {
+        if (typeof languages[key] !== "string") return false;
+
+        return languages[key].toLowerCase() === language;
+    });
+
+    return keys[0] || null;
+}
+
+/**
+ * Returns true if the desiredLang is supported by Google Translate and false otherwise
+ * @param {String} language The ISO 639-1 code or the name of the desired language.
+ * @returns {boolean} If the language is supported or not.
+ */
+function isSupported(language) {
+    return Boolean(getISOCode(language));
+}
+
+module.exports = languages;
+module.exports.isSupported = isSupported;
+module.exports.getISOCode = getISOCode;
+
+
+/***/ }),
+
+/***/ 7029:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/**
+ * Last update: 2/11/2018
+ * https://translate.google.com/translate/releases/twsfe_w_20160620_RC00/r/js/desktop_module_main.js
+ *
+ * Everything between 'BEGIN' and 'END' was copied from the script above.
+ */
+
+const got = __nccwpck_require__(3061);
+
+/* eslint-disable */
+// BEGIN
+function zr(a) {
+    let b;
+    if (null !== yr) b = yr;
+    else {
+        b = wr(String.fromCharCode(84));
+        let c = wr(String.fromCharCode(75));
+        b = [ b(), b() ];
+        b[1] = c();
+        b = (yr = window[b.join(c())] || "") || "";
+    }
+    let d = wr(String.fromCharCode(116));
+    let c = wr(String.fromCharCode(107));
+    d = [ d(), d() ];
+    d[1] = c();
+    c = "&" + d.join("") + "=";
+    d = b.split(".");
+    b = Number(d[0]) || 0;
+    // eslint-disable-next-line no-var
+    for (var e = [], f = 0, g = 0; g < a.length; g++) {
+        let l = a.charCodeAt(g);
+        128 > l ? e[f++] = l : (2048 > l ? e[f++] = l >> 6 | 192 : ((l & 64512) == 55296 && g + 1 < a.length && (a.charCodeAt(g + 1) & 64512) == 56320 ? (l = 65536 + ((l & 1023) << 10) + (a.charCodeAt(++g) & 1023), e[f++] = l >> 18 | 240, e[f++] = l >> 12 & 63 | 128) : e[f++] = l >> 12 | 224, e[f++] = l >> 6 & 63 | 128), e[f++] = l & 63 | 128);
+    }
+    a = b;
+    for (let f = 0; f < e.length; f++) a += e[f], a = xr(a, "+-a^+6");
+    a = xr(a, "+-3^+b+-f");
+    a ^= Number(d[1]) || 0;
+    0 > a && (a = (a & 2147483647) + 2147483648);
+    a %= 1E6;
+    return c + (a.toString() + "." + (a ^ b));
+}
+
+let yr = null;
+let wr = function(a) {
+    return function() {
+        return a;
+    };
+};
+let xr = function(a, b) {
+    for (let c = 0; c < b.length - 2; c += 3) {
+        let d = b.charAt(c + 2);
+        d = d >= "a" ? d.charCodeAt(0) - 87 : Number(d);
+        d = b.charAt(c + 1) == "+" ? a >>> d : a << d;
+        a = b.charAt(c) == "+" ? a + d & 4294967295 : a ^ d;
+    }
+    return a;
+};
+// END
+/* eslint-enable */
+
+const config = new Map();
+
+const window = {
+    TKK: config.get("TKK") || "0"
+};
+
+// eslint-disable-next-line require-jsdoc
+async function updateTKK() {
+    try {
+        let now = Math.floor(Date.now() / 3600000);
+
+        if (Number(window.TKK.split(".")[0]) !== now) {
+            let res = await got("https://translate.google.com");
+
+            // code will extract something like tkk:'1232135.131231321312', we need only value
+            const code = res.body.match(/tkk:'\d+.\d+'/g);
+
+            if (code.length > 0) {
+                // extracting value tkk:'1232135.131231321312', this will extract only token: 1232135.131231321312
+                const xt = code[0].split(":")[1].replace(/'/g, "");
+
+                window.TKK = xt;
+                config.set("TKK", xt);
+            }
+        }
+    }
+    catch (e) {
+        if (e.name === "HTTPError") {
+            let error = new Error();
+            error.name = e.name;
+            error.statusCode = e.statusCode;
+            error.statusMessage = e.statusMessage;
+            throw error;
+        }
+        throw e;
+    }
+}
+
+// eslint-disable-next-line require-jsdoc
+async function generate(text) {
+    try {
+        await updateTKK();
+
+        let tk = zr(text);
+        tk = tk.replace("&tk=", "");
+        return { name: "tk", value: tk };
+    }
+    catch (error) {
+        return error;
+    }
+}
+
+module.exports.generate = generate;
+
+
+/***/ }),
+
 /***/ 334:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -3647,6 +4084,549 @@ exports.Octokit = Octokit;
 
 /***/ }),
 
+/***/ 7678:
+/***/ ((module, exports) => {
+
+"use strict";
+
+/// <reference lib="es2018"/>
+/// <reference lib="dom"/>
+/// <reference types="node"/>
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const typedArrayTypeNames = [
+    'Int8Array',
+    'Uint8Array',
+    'Uint8ClampedArray',
+    'Int16Array',
+    'Uint16Array',
+    'Int32Array',
+    'Uint32Array',
+    'Float32Array',
+    'Float64Array',
+    'BigInt64Array',
+    'BigUint64Array'
+];
+function isTypedArrayName(name) {
+    return typedArrayTypeNames.includes(name);
+}
+const objectTypeNames = [
+    'Function',
+    'Generator',
+    'AsyncGenerator',
+    'GeneratorFunction',
+    'AsyncGeneratorFunction',
+    'AsyncFunction',
+    'Observable',
+    'Array',
+    'Buffer',
+    'Object',
+    'RegExp',
+    'Date',
+    'Error',
+    'Map',
+    'Set',
+    'WeakMap',
+    'WeakSet',
+    'ArrayBuffer',
+    'SharedArrayBuffer',
+    'DataView',
+    'Promise',
+    'URL',
+    'HTMLElement',
+    ...typedArrayTypeNames
+];
+function isObjectTypeName(name) {
+    return objectTypeNames.includes(name);
+}
+const primitiveTypeNames = [
+    'null',
+    'undefined',
+    'string',
+    'number',
+    'bigint',
+    'boolean',
+    'symbol'
+];
+function isPrimitiveTypeName(name) {
+    return primitiveTypeNames.includes(name);
+}
+// eslint-disable-next-line @typescript-eslint/ban-types
+function isOfType(type) {
+    return (value) => typeof value === type;
+}
+const { toString } = Object.prototype;
+const getObjectType = (value) => {
+    const objectTypeName = toString.call(value).slice(8, -1);
+    if (/HTML\w+Element/.test(objectTypeName) && is.domElement(value)) {
+        return 'HTMLElement';
+    }
+    if (isObjectTypeName(objectTypeName)) {
+        return objectTypeName;
+    }
+    return undefined;
+};
+const isObjectOfType = (type) => (value) => getObjectType(value) === type;
+function is(value) {
+    if (value === null) {
+        return 'null';
+    }
+    switch (typeof value) {
+        case 'undefined':
+            return 'undefined';
+        case 'string':
+            return 'string';
+        case 'number':
+            return 'number';
+        case 'boolean':
+            return 'boolean';
+        case 'function':
+            return 'Function';
+        case 'bigint':
+            return 'bigint';
+        case 'symbol':
+            return 'symbol';
+        default:
+    }
+    if (is.observable(value)) {
+        return 'Observable';
+    }
+    if (is.array(value)) {
+        return 'Array';
+    }
+    if (is.buffer(value)) {
+        return 'Buffer';
+    }
+    const tagType = getObjectType(value);
+    if (tagType) {
+        return tagType;
+    }
+    if (value instanceof String || value instanceof Boolean || value instanceof Number) {
+        throw new TypeError('Please don\'t use object wrappers for primitive types');
+    }
+    return 'Object';
+}
+is.undefined = isOfType('undefined');
+is.string = isOfType('string');
+const isNumberType = isOfType('number');
+is.number = (value) => isNumberType(value) && !is.nan(value);
+is.bigint = isOfType('bigint');
+// eslint-disable-next-line @typescript-eslint/ban-types
+is.function_ = isOfType('function');
+is.null_ = (value) => value === null;
+is.class_ = (value) => is.function_(value) && value.toString().startsWith('class ');
+is.boolean = (value) => value === true || value === false;
+is.symbol = isOfType('symbol');
+is.numericString = (value) => is.string(value) && !is.emptyStringOrWhitespace(value) && !Number.isNaN(Number(value));
+is.array = (value, assertion) => {
+    if (!Array.isArray(value)) {
+        return false;
+    }
+    if (!is.function_(assertion)) {
+        return true;
+    }
+    return value.every(assertion);
+};
+is.buffer = (value) => { var _a, _b, _c, _d; return (_d = (_c = (_b = (_a = value) === null || _a === void 0 ? void 0 : _a.constructor) === null || _b === void 0 ? void 0 : _b.isBuffer) === null || _c === void 0 ? void 0 : _c.call(_b, value)) !== null && _d !== void 0 ? _d : false; };
+is.nullOrUndefined = (value) => is.null_(value) || is.undefined(value);
+is.object = (value) => !is.null_(value) && (typeof value === 'object' || is.function_(value));
+is.iterable = (value) => { var _a; return is.function_((_a = value) === null || _a === void 0 ? void 0 : _a[Symbol.iterator]); };
+is.asyncIterable = (value) => { var _a; return is.function_((_a = value) === null || _a === void 0 ? void 0 : _a[Symbol.asyncIterator]); };
+is.generator = (value) => is.iterable(value) && is.function_(value.next) && is.function_(value.throw);
+is.asyncGenerator = (value) => is.asyncIterable(value) && is.function_(value.next) && is.function_(value.throw);
+is.nativePromise = (value) => isObjectOfType('Promise')(value);
+const hasPromiseAPI = (value) => {
+    var _a, _b;
+    return is.function_((_a = value) === null || _a === void 0 ? void 0 : _a.then) &&
+        is.function_((_b = value) === null || _b === void 0 ? void 0 : _b.catch);
+};
+is.promise = (value) => is.nativePromise(value) || hasPromiseAPI(value);
+is.generatorFunction = isObjectOfType('GeneratorFunction');
+is.asyncGeneratorFunction = (value) => getObjectType(value) === 'AsyncGeneratorFunction';
+is.asyncFunction = (value) => getObjectType(value) === 'AsyncFunction';
+// eslint-disable-next-line no-prototype-builtins, @typescript-eslint/ban-types
+is.boundFunction = (value) => is.function_(value) && !value.hasOwnProperty('prototype');
+is.regExp = isObjectOfType('RegExp');
+is.date = isObjectOfType('Date');
+is.error = isObjectOfType('Error');
+is.map = (value) => isObjectOfType('Map')(value);
+is.set = (value) => isObjectOfType('Set')(value);
+is.weakMap = (value) => isObjectOfType('WeakMap')(value);
+is.weakSet = (value) => isObjectOfType('WeakSet')(value);
+is.int8Array = isObjectOfType('Int8Array');
+is.uint8Array = isObjectOfType('Uint8Array');
+is.uint8ClampedArray = isObjectOfType('Uint8ClampedArray');
+is.int16Array = isObjectOfType('Int16Array');
+is.uint16Array = isObjectOfType('Uint16Array');
+is.int32Array = isObjectOfType('Int32Array');
+is.uint32Array = isObjectOfType('Uint32Array');
+is.float32Array = isObjectOfType('Float32Array');
+is.float64Array = isObjectOfType('Float64Array');
+is.bigInt64Array = isObjectOfType('BigInt64Array');
+is.bigUint64Array = isObjectOfType('BigUint64Array');
+is.arrayBuffer = isObjectOfType('ArrayBuffer');
+is.sharedArrayBuffer = isObjectOfType('SharedArrayBuffer');
+is.dataView = isObjectOfType('DataView');
+is.directInstanceOf = (instance, class_) => Object.getPrototypeOf(instance) === class_.prototype;
+is.urlInstance = (value) => isObjectOfType('URL')(value);
+is.urlString = (value) => {
+    if (!is.string(value)) {
+        return false;
+    }
+    try {
+        new URL(value); // eslint-disable-line no-new
+        return true;
+    }
+    catch (_a) {
+        return false;
+    }
+};
+// TODO: Use the `not` operator with a type guard here when it's available.
+// Example: `is.truthy = (value: unknown): value is (not false | not 0 | not '' | not undefined | not null) => Boolean(value);`
+is.truthy = (value) => Boolean(value);
+// Example: `is.falsy = (value: unknown): value is (not true | 0 | '' | undefined | null) => Boolean(value);`
+is.falsy = (value) => !value;
+is.nan = (value) => Number.isNaN(value);
+is.primitive = (value) => is.null_(value) || isPrimitiveTypeName(typeof value);
+is.integer = (value) => Number.isInteger(value);
+is.safeInteger = (value) => Number.isSafeInteger(value);
+is.plainObject = (value) => {
+    // From: https://github.com/sindresorhus/is-plain-obj/blob/master/index.js
+    if (toString.call(value) !== '[object Object]') {
+        return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === null || prototype === Object.getPrototypeOf({});
+};
+is.typedArray = (value) => isTypedArrayName(getObjectType(value));
+const isValidLength = (value) => is.safeInteger(value) && value >= 0;
+is.arrayLike = (value) => !is.nullOrUndefined(value) && !is.function_(value) && isValidLength(value.length);
+is.inRange = (value, range) => {
+    if (is.number(range)) {
+        return value >= Math.min(0, range) && value <= Math.max(range, 0);
+    }
+    if (is.array(range) && range.length === 2) {
+        return value >= Math.min(...range) && value <= Math.max(...range);
+    }
+    throw new TypeError(`Invalid range: ${JSON.stringify(range)}`);
+};
+const NODE_TYPE_ELEMENT = 1;
+const DOM_PROPERTIES_TO_CHECK = [
+    'innerHTML',
+    'ownerDocument',
+    'style',
+    'attributes',
+    'nodeValue'
+];
+is.domElement = (value) => {
+    return is.object(value) &&
+        value.nodeType === NODE_TYPE_ELEMENT &&
+        is.string(value.nodeName) &&
+        !is.plainObject(value) &&
+        DOM_PROPERTIES_TO_CHECK.every(property => property in value);
+};
+is.observable = (value) => {
+    var _a, _b, _c, _d;
+    if (!value) {
+        return false;
+    }
+    // eslint-disable-next-line no-use-extend-native/no-use-extend-native
+    if (value === ((_b = (_a = value)[Symbol.observable]) === null || _b === void 0 ? void 0 : _b.call(_a))) {
+        return true;
+    }
+    if (value === ((_d = (_c = value)['@@observable']) === null || _d === void 0 ? void 0 : _d.call(_c))) {
+        return true;
+    }
+    return false;
+};
+is.nodeStream = (value) => is.object(value) && is.function_(value.pipe) && !is.observable(value);
+is.infinite = (value) => value === Infinity || value === -Infinity;
+const isAbsoluteMod2 = (remainder) => (value) => is.integer(value) && Math.abs(value % 2) === remainder;
+is.evenInteger = isAbsoluteMod2(0);
+is.oddInteger = isAbsoluteMod2(1);
+is.emptyArray = (value) => is.array(value) && value.length === 0;
+is.nonEmptyArray = (value) => is.array(value) && value.length > 0;
+is.emptyString = (value) => is.string(value) && value.length === 0;
+// TODO: Use `not ''` when the `not` operator is available.
+is.nonEmptyString = (value) => is.string(value) && value.length > 0;
+const isWhiteSpaceString = (value) => is.string(value) && !/\S/.test(value);
+is.emptyStringOrWhitespace = (value) => is.emptyString(value) || isWhiteSpaceString(value);
+is.emptyObject = (value) => is.object(value) && !is.map(value) && !is.set(value) && Object.keys(value).length === 0;
+// TODO: Use `not` operator here to remove `Map` and `Set` from type guard:
+// - https://github.com/Microsoft/TypeScript/pull/29317
+is.nonEmptyObject = (value) => is.object(value) && !is.map(value) && !is.set(value) && Object.keys(value).length > 0;
+is.emptySet = (value) => is.set(value) && value.size === 0;
+is.nonEmptySet = (value) => is.set(value) && value.size > 0;
+is.emptyMap = (value) => is.map(value) && value.size === 0;
+is.nonEmptyMap = (value) => is.map(value) && value.size > 0;
+const predicateOnArray = (method, predicate, values) => {
+    if (!is.function_(predicate)) {
+        throw new TypeError(`Invalid predicate: ${JSON.stringify(predicate)}`);
+    }
+    if (values.length === 0) {
+        throw new TypeError('Invalid number of values');
+    }
+    return method.call(values, predicate);
+};
+is.any = (predicate, ...values) => {
+    const predicates = is.array(predicate) ? predicate : [predicate];
+    return predicates.some(singlePredicate => predicateOnArray(Array.prototype.some, singlePredicate, values));
+};
+is.all = (predicate, ...values) => predicateOnArray(Array.prototype.every, predicate, values);
+const assertType = (condition, description, value) => {
+    if (!condition) {
+        throw new TypeError(`Expected value which is \`${description}\`, received value of type \`${is(value)}\`.`);
+    }
+};
+exports.assert = {
+    // Unknowns.
+    undefined: (value) => assertType(is.undefined(value), 'undefined', value),
+    string: (value) => assertType(is.string(value), 'string', value),
+    number: (value) => assertType(is.number(value), 'number', value),
+    bigint: (value) => assertType(is.bigint(value), 'bigint', value),
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    function_: (value) => assertType(is.function_(value), 'Function', value),
+    null_: (value) => assertType(is.null_(value), 'null', value),
+    class_: (value) => assertType(is.class_(value), "Class" /* class_ */, value),
+    boolean: (value) => assertType(is.boolean(value), 'boolean', value),
+    symbol: (value) => assertType(is.symbol(value), 'symbol', value),
+    numericString: (value) => assertType(is.numericString(value), "string with a number" /* numericString */, value),
+    array: (value, assertion) => {
+        const assert = assertType;
+        assert(is.array(value), 'Array', value);
+        if (assertion) {
+            value.forEach(assertion);
+        }
+    },
+    buffer: (value) => assertType(is.buffer(value), 'Buffer', value),
+    nullOrUndefined: (value) => assertType(is.nullOrUndefined(value), "null or undefined" /* nullOrUndefined */, value),
+    object: (value) => assertType(is.object(value), 'Object', value),
+    iterable: (value) => assertType(is.iterable(value), "Iterable" /* iterable */, value),
+    asyncIterable: (value) => assertType(is.asyncIterable(value), "AsyncIterable" /* asyncIterable */, value),
+    generator: (value) => assertType(is.generator(value), 'Generator', value),
+    asyncGenerator: (value) => assertType(is.asyncGenerator(value), 'AsyncGenerator', value),
+    nativePromise: (value) => assertType(is.nativePromise(value), "native Promise" /* nativePromise */, value),
+    promise: (value) => assertType(is.promise(value), 'Promise', value),
+    generatorFunction: (value) => assertType(is.generatorFunction(value), 'GeneratorFunction', value),
+    asyncGeneratorFunction: (value) => assertType(is.asyncGeneratorFunction(value), 'AsyncGeneratorFunction', value),
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    asyncFunction: (value) => assertType(is.asyncFunction(value), 'AsyncFunction', value),
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    boundFunction: (value) => assertType(is.boundFunction(value), 'Function', value),
+    regExp: (value) => assertType(is.regExp(value), 'RegExp', value),
+    date: (value) => assertType(is.date(value), 'Date', value),
+    error: (value) => assertType(is.error(value), 'Error', value),
+    map: (value) => assertType(is.map(value), 'Map', value),
+    set: (value) => assertType(is.set(value), 'Set', value),
+    weakMap: (value) => assertType(is.weakMap(value), 'WeakMap', value),
+    weakSet: (value) => assertType(is.weakSet(value), 'WeakSet', value),
+    int8Array: (value) => assertType(is.int8Array(value), 'Int8Array', value),
+    uint8Array: (value) => assertType(is.uint8Array(value), 'Uint8Array', value),
+    uint8ClampedArray: (value) => assertType(is.uint8ClampedArray(value), 'Uint8ClampedArray', value),
+    int16Array: (value) => assertType(is.int16Array(value), 'Int16Array', value),
+    uint16Array: (value) => assertType(is.uint16Array(value), 'Uint16Array', value),
+    int32Array: (value) => assertType(is.int32Array(value), 'Int32Array', value),
+    uint32Array: (value) => assertType(is.uint32Array(value), 'Uint32Array', value),
+    float32Array: (value) => assertType(is.float32Array(value), 'Float32Array', value),
+    float64Array: (value) => assertType(is.float64Array(value), 'Float64Array', value),
+    bigInt64Array: (value) => assertType(is.bigInt64Array(value), 'BigInt64Array', value),
+    bigUint64Array: (value) => assertType(is.bigUint64Array(value), 'BigUint64Array', value),
+    arrayBuffer: (value) => assertType(is.arrayBuffer(value), 'ArrayBuffer', value),
+    sharedArrayBuffer: (value) => assertType(is.sharedArrayBuffer(value), 'SharedArrayBuffer', value),
+    dataView: (value) => assertType(is.dataView(value), 'DataView', value),
+    urlInstance: (value) => assertType(is.urlInstance(value), 'URL', value),
+    urlString: (value) => assertType(is.urlString(value), "string with a URL" /* urlString */, value),
+    truthy: (value) => assertType(is.truthy(value), "truthy" /* truthy */, value),
+    falsy: (value) => assertType(is.falsy(value), "falsy" /* falsy */, value),
+    nan: (value) => assertType(is.nan(value), "NaN" /* nan */, value),
+    primitive: (value) => assertType(is.primitive(value), "primitive" /* primitive */, value),
+    integer: (value) => assertType(is.integer(value), "integer" /* integer */, value),
+    safeInteger: (value) => assertType(is.safeInteger(value), "integer" /* safeInteger */, value),
+    plainObject: (value) => assertType(is.plainObject(value), "plain object" /* plainObject */, value),
+    typedArray: (value) => assertType(is.typedArray(value), "TypedArray" /* typedArray */, value),
+    arrayLike: (value) => assertType(is.arrayLike(value), "array-like" /* arrayLike */, value),
+    domElement: (value) => assertType(is.domElement(value), "HTMLElement" /* domElement */, value),
+    observable: (value) => assertType(is.observable(value), 'Observable', value),
+    nodeStream: (value) => assertType(is.nodeStream(value), "Node.js Stream" /* nodeStream */, value),
+    infinite: (value) => assertType(is.infinite(value), "infinite number" /* infinite */, value),
+    emptyArray: (value) => assertType(is.emptyArray(value), "empty array" /* emptyArray */, value),
+    nonEmptyArray: (value) => assertType(is.nonEmptyArray(value), "non-empty array" /* nonEmptyArray */, value),
+    emptyString: (value) => assertType(is.emptyString(value), "empty string" /* emptyString */, value),
+    nonEmptyString: (value) => assertType(is.nonEmptyString(value), "non-empty string" /* nonEmptyString */, value),
+    emptyStringOrWhitespace: (value) => assertType(is.emptyStringOrWhitespace(value), "empty string or whitespace" /* emptyStringOrWhitespace */, value),
+    emptyObject: (value) => assertType(is.emptyObject(value), "empty object" /* emptyObject */, value),
+    nonEmptyObject: (value) => assertType(is.nonEmptyObject(value), "non-empty object" /* nonEmptyObject */, value),
+    emptySet: (value) => assertType(is.emptySet(value), "empty set" /* emptySet */, value),
+    nonEmptySet: (value) => assertType(is.nonEmptySet(value), "non-empty set" /* nonEmptySet */, value),
+    emptyMap: (value) => assertType(is.emptyMap(value), "empty map" /* emptyMap */, value),
+    nonEmptyMap: (value) => assertType(is.nonEmptyMap(value), "non-empty map" /* nonEmptyMap */, value),
+    // Numbers.
+    evenInteger: (value) => assertType(is.evenInteger(value), "even integer" /* evenInteger */, value),
+    oddInteger: (value) => assertType(is.oddInteger(value), "odd integer" /* oddInteger */, value),
+    // Two arguments.
+    directInstanceOf: (instance, class_) => assertType(is.directInstanceOf(instance, class_), "T" /* directInstanceOf */, instance),
+    inRange: (value, range) => assertType(is.inRange(value, range), "in range" /* inRange */, value),
+    // Variadic functions.
+    any: (predicate, ...values) => assertType(is.any(predicate, ...values), "predicate returns truthy for any value" /* any */, values),
+    all: (predicate, ...values) => assertType(is.all(predicate, ...values), "predicate returns truthy for all values" /* all */, values)
+};
+// Some few keywords are reserved, but we'll populate them for Node.js users
+// See https://github.com/Microsoft/TypeScript/issues/2536
+Object.defineProperties(is, {
+    class: {
+        value: is.class_
+    },
+    function: {
+        value: is.function_
+    },
+    null: {
+        value: is.null_
+    }
+});
+Object.defineProperties(exports.assert, {
+    class: {
+        value: exports.assert.class_
+    },
+    function: {
+        value: exports.assert.function_
+    },
+    null: {
+        value: exports.assert.null_
+    }
+});
+exports.default = is;
+// For CommonJS default export support
+module.exports = is;
+module.exports.default = is;
+module.exports.assert = exports.assert;
+
+
+/***/ }),
+
+/***/ 8097:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const defer_to_connect_1 = __nccwpck_require__(6214);
+const nodejsMajorVersion = Number(process.versions.node.split('.')[0]);
+const timer = (request) => {
+    const timings = {
+        start: Date.now(),
+        socket: undefined,
+        lookup: undefined,
+        connect: undefined,
+        secureConnect: undefined,
+        upload: undefined,
+        response: undefined,
+        end: undefined,
+        error: undefined,
+        abort: undefined,
+        phases: {
+            wait: undefined,
+            dns: undefined,
+            tcp: undefined,
+            tls: undefined,
+            request: undefined,
+            firstByte: undefined,
+            download: undefined,
+            total: undefined
+        }
+    };
+    request.timings = timings;
+    const handleError = (origin) => {
+        const emit = origin.emit.bind(origin);
+        origin.emit = (event, ...args) => {
+            // Catches the `error` event
+            if (event === 'error') {
+                timings.error = Date.now();
+                timings.phases.total = timings.error - timings.start;
+                origin.emit = emit;
+            }
+            // Saves the original behavior
+            return emit(event, ...args);
+        };
+    };
+    handleError(request);
+    request.prependOnceListener('abort', () => {
+        timings.abort = Date.now();
+        // Let the `end` response event be responsible for setting the total phase,
+        // unless the Node.js major version is >= 13.
+        if (!timings.response || nodejsMajorVersion >= 13) {
+            timings.phases.total = Date.now() - timings.start;
+        }
+    });
+    const onSocket = (socket) => {
+        timings.socket = Date.now();
+        timings.phases.wait = timings.socket - timings.start;
+        const lookupListener = () => {
+            timings.lookup = Date.now();
+            timings.phases.dns = timings.lookup - timings.socket;
+        };
+        socket.prependOnceListener('lookup', lookupListener);
+        defer_to_connect_1.default(socket, {
+            connect: () => {
+                timings.connect = Date.now();
+                if (timings.lookup === undefined) {
+                    socket.removeListener('lookup', lookupListener);
+                    timings.lookup = timings.connect;
+                    timings.phases.dns = timings.lookup - timings.socket;
+                }
+                timings.phases.tcp = timings.connect - timings.lookup;
+                // This callback is called before flushing any data,
+                // so we don't need to set `timings.phases.request` here.
+            },
+            secureConnect: () => {
+                timings.secureConnect = Date.now();
+                timings.phases.tls = timings.secureConnect - timings.connect;
+            }
+        });
+    };
+    if (request.socket) {
+        onSocket(request.socket);
+    }
+    else {
+        request.prependOnceListener('socket', onSocket);
+    }
+    const onUpload = () => {
+        var _a;
+        timings.upload = Date.now();
+        timings.phases.request = timings.upload - (_a = timings.secureConnect, (_a !== null && _a !== void 0 ? _a : timings.connect));
+    };
+    const writableFinished = () => {
+        if (typeof request.writableFinished === 'boolean') {
+            return request.writableFinished;
+        }
+        // Node.js doesn't have `request.writableFinished` property
+        return request.finished && request.outputSize === 0 && (!request.socket || request.socket.writableLength === 0);
+    };
+    if (writableFinished()) {
+        onUpload();
+    }
+    else {
+        request.prependOnceListener('finish', onUpload);
+    }
+    request.prependOnceListener('response', (response) => {
+        timings.response = Date.now();
+        timings.phases.firstByte = timings.response - timings.upload;
+        response.timings = timings;
+        handleError(response);
+        response.prependOnceListener('end', () => {
+            timings.end = Date.now();
+            timings.phases.download = timings.end - timings.response;
+            timings.phases.total = timings.end - timings.start;
+        });
+    });
+    return timings;
+};
+exports.default = timer;
+// For CommonJS default export support
+module.exports = timer;
+module.exports.default = timer;
+
+
+/***/ }),
+
 /***/ 3682:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -3824,352 +4804,934 @@ function removeHook(state, name, method) {
 
 /***/ }),
 
-/***/ 6582:
-/***/ ((module) => {
+/***/ 2286:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
 
+const {
+	V4MAPPED,
+	ADDRCONFIG,
+	ALL,
+	promises: {
+		Resolver: AsyncResolver
+	},
+	lookup: dnsLookup
+} = __nccwpck_require__(881);
+const {promisify} = __nccwpck_require__(1669);
+const os = __nccwpck_require__(2087);
 
-module.exports = Error.captureStackTrace || function (error) {
-	var container = new Error();
+const kCacheableLookupCreateConnection = Symbol('cacheableLookupCreateConnection');
+const kCacheableLookupInstance = Symbol('cacheableLookupInstance');
+const kExpires = Symbol('expires');
 
-	Object.defineProperty(error, 'stack', {
-		configurable: true,
-		get: function getStack() {
-			var stack = container.stack;
+const supportsALL = typeof ALL === 'number';
 
-			Object.defineProperty(this, 'stack', {
-				value: stack
+const verifyAgent = agent => {
+	if (!(agent && typeof agent.createConnection === 'function')) {
+		throw new Error('Expected an Agent instance as the first argument');
+	}
+};
+
+const map4to6 = entries => {
+	for (const entry of entries) {
+		if (entry.family === 6) {
+			continue;
+		}
+
+		entry.address = `::ffff:${entry.address}`;
+		entry.family = 6;
+	}
+};
+
+const getIfaceInfo = () => {
+	let has4 = false;
+	let has6 = false;
+
+	for (const device of Object.values(os.networkInterfaces())) {
+		for (const iface of device) {
+			if (iface.internal) {
+				continue;
+			}
+
+			if (iface.family === 'IPv6') {
+				has6 = true;
+			} else {
+				has4 = true;
+			}
+
+			if (has4 && has6) {
+				return {has4, has6};
+			}
+		}
+	}
+
+	return {has4, has6};
+};
+
+const isIterable = map => {
+	return Symbol.iterator in map;
+};
+
+const ttl = {ttl: true};
+const all = {all: true};
+
+class CacheableLookup {
+	constructor({
+		cache = new Map(),
+		maxTtl = Infinity,
+		fallbackDuration = 3600,
+		errorTtl = 0.15,
+		resolver = new AsyncResolver(),
+		lookup = dnsLookup
+	} = {}) {
+		this.maxTtl = maxTtl;
+		this.errorTtl = errorTtl;
+
+		this._cache = cache;
+		this._resolver = resolver;
+		this._dnsLookup = promisify(lookup);
+
+		if (this._resolver instanceof AsyncResolver) {
+			this._resolve4 = this._resolver.resolve4.bind(this._resolver);
+			this._resolve6 = this._resolver.resolve6.bind(this._resolver);
+		} else {
+			this._resolve4 = promisify(this._resolver.resolve4.bind(this._resolver));
+			this._resolve6 = promisify(this._resolver.resolve6.bind(this._resolver));
+		}
+
+		this._iface = getIfaceInfo();
+
+		this._pending = {};
+		this._nextRemovalTime = false;
+		this._hostnamesToFallback = new Set();
+
+		if (fallbackDuration < 1) {
+			this._fallback = false;
+		} else {
+			this._fallback = true;
+
+			const interval = setInterval(() => {
+				this._hostnamesToFallback.clear();
+			}, fallbackDuration * 1000);
+
+			/* istanbul ignore next: There is no `interval.unref()` when running inside an Electron renderer */
+			if (interval.unref) {
+				interval.unref();
+			}
+		}
+
+		this.lookup = this.lookup.bind(this);
+		this.lookupAsync = this.lookupAsync.bind(this);
+	}
+
+	set servers(servers) {
+		this.clear();
+
+		this._resolver.setServers(servers);
+	}
+
+	get servers() {
+		return this._resolver.getServers();
+	}
+
+	lookup(hostname, options, callback) {
+		if (typeof options === 'function') {
+			callback = options;
+			options = {};
+		} else if (typeof options === 'number') {
+			options = {
+				family: options
+			};
+		}
+
+		if (!callback) {
+			throw new Error('Callback must be a function.');
+		}
+
+		// eslint-disable-next-line promise/prefer-await-to-then
+		this.lookupAsync(hostname, options).then(result => {
+			if (options.all) {
+				callback(null, result);
+			} else {
+				callback(null, result.address, result.family, result.expires, result.ttl);
+			}
+		}, callback);
+	}
+
+	async lookupAsync(hostname, options = {}) {
+		if (typeof options === 'number') {
+			options = {
+				family: options
+			};
+		}
+
+		let cached = await this.query(hostname);
+
+		if (options.family === 6) {
+			const filtered = cached.filter(entry => entry.family === 6);
+
+			if (options.hints & V4MAPPED) {
+				if ((supportsALL && options.hints & ALL) || filtered.length === 0) {
+					map4to6(cached);
+				} else {
+					cached = filtered;
+				}
+			} else {
+				cached = filtered;
+			}
+		} else if (options.family === 4) {
+			cached = cached.filter(entry => entry.family === 4);
+		}
+
+		if (options.hints & ADDRCONFIG) {
+			const {_iface} = this;
+			cached = cached.filter(entry => entry.family === 6 ? _iface.has6 : _iface.has4);
+		}
+
+		if (cached.length === 0) {
+			const error = new Error(`cacheableLookup ENOTFOUND ${hostname}`);
+			error.code = 'ENOTFOUND';
+			error.hostname = hostname;
+
+			throw error;
+		}
+
+		if (options.all) {
+			return cached;
+		}
+
+		return cached[0];
+	}
+
+	async query(hostname) {
+		let cached = await this._cache.get(hostname);
+
+		if (!cached) {
+			const pending = this._pending[hostname];
+
+			if (pending) {
+				cached = await pending;
+			} else {
+				const newPromise = this.queryAndCache(hostname);
+				this._pending[hostname] = newPromise;
+
+				try {
+					cached = await newPromise;
+				} finally {
+					delete this._pending[hostname];
+				}
+			}
+		}
+
+		cached = cached.map(entry => {
+			return {...entry};
+		});
+
+		return cached;
+	}
+
+	async _resolve(hostname) {
+		const wrap = async promise => {
+			try {
+				return await promise;
+			} catch (error) {
+				if (error.code === 'ENODATA' || error.code === 'ENOTFOUND') {
+					return [];
+				}
+
+				throw error;
+			}
+		};
+
+		// ANY is unsafe as it doesn't trigger new queries in the underlying server.
+		const [A, AAAA] = await Promise.all([
+			this._resolve4(hostname, ttl),
+			this._resolve6(hostname, ttl)
+		].map(promise => wrap(promise)));
+
+		let aTtl = 0;
+		let aaaaTtl = 0;
+		let cacheTtl = 0;
+
+		const now = Date.now();
+
+		for (const entry of A) {
+			entry.family = 4;
+			entry.expires = now + (entry.ttl * 1000);
+
+			aTtl = Math.max(aTtl, entry.ttl);
+		}
+
+		for (const entry of AAAA) {
+			entry.family = 6;
+			entry.expires = now + (entry.ttl * 1000);
+
+			aaaaTtl = Math.max(aaaaTtl, entry.ttl);
+		}
+
+		if (A.length > 0) {
+			if (AAAA.length > 0) {
+				cacheTtl = Math.min(aTtl, aaaaTtl);
+			} else {
+				cacheTtl = aTtl;
+			}
+		} else {
+			cacheTtl = aaaaTtl;
+		}
+
+		return {
+			entries: [
+				...A,
+				...AAAA
+			],
+			cacheTtl
+		};
+	}
+
+	async _lookup(hostname) {
+		try {
+			const entries = await this._dnsLookup(hostname, {
+				all: true
 			});
 
-			return stack;
+			return {
+				entries,
+				cacheTtl: 0
+			};
+		} catch (_) {
+			return {
+				entries: [],
+				cacheTtl: 0
+			};
+		}
+	}
+
+	async _set(hostname, data, cacheTtl) {
+		if (this.maxTtl > 0 && cacheTtl > 0) {
+			cacheTtl = Math.min(cacheTtl, this.maxTtl) * 1000;
+			data[kExpires] = Date.now() + cacheTtl;
+
+			try {
+				await this._cache.set(hostname, data, cacheTtl);
+			} catch (error) {
+				this.lookupAsync = async () => {
+					const cacheError = new Error('Cache Error. Please recreate the CacheableLookup instance.');
+					cacheError.cause = error;
+
+					throw cacheError;
+				};
+			}
+
+			if (isIterable(this._cache)) {
+				this._tick(cacheTtl);
+			}
+		}
+	}
+
+	async queryAndCache(hostname) {
+		if (this._hostnamesToFallback.has(hostname)) {
+			return this._dnsLookup(hostname, all);
+		}
+
+		let query = await this._resolve(hostname);
+
+		if (query.entries.length === 0 && this._fallback) {
+			query = await this._lookup(hostname);
+
+			if (query.entries.length !== 0) {
+				// Use `dns.lookup(...)` for that particular hostname
+				this._hostnamesToFallback.add(hostname);
+			}
+		}
+
+		const cacheTtl = query.entries.length === 0 ? this.errorTtl : query.cacheTtl;
+		await this._set(hostname, query.entries, cacheTtl);
+
+		return query.entries;
+	}
+
+	_tick(ms) {
+		const nextRemovalTime = this._nextRemovalTime;
+
+		if (!nextRemovalTime || ms < nextRemovalTime) {
+			clearTimeout(this._removalTimeout);
+
+			this._nextRemovalTime = ms;
+
+			this._removalTimeout = setTimeout(() => {
+				this._nextRemovalTime = false;
+
+				let nextExpiry = Infinity;
+
+				const now = Date.now();
+
+				for (const [hostname, entries] of this._cache) {
+					const expires = entries[kExpires];
+
+					if (now >= expires) {
+						this._cache.delete(hostname);
+					} else if (expires < nextExpiry) {
+						nextExpiry = expires;
+					}
+				}
+
+				if (nextExpiry !== Infinity) {
+					this._tick(nextExpiry - now);
+				}
+			}, ms);
+
+			/* istanbul ignore next: There is no `timeout.unref()` when running inside an Electron renderer */
+			if (this._removalTimeout.unref) {
+				this._removalTimeout.unref();
+			}
+		}
+	}
+
+	install(agent) {
+		verifyAgent(agent);
+
+		if (kCacheableLookupCreateConnection in agent) {
+			throw new Error('CacheableLookup has been already installed');
+		}
+
+		agent[kCacheableLookupCreateConnection] = agent.createConnection;
+		agent[kCacheableLookupInstance] = this;
+
+		agent.createConnection = (options, callback) => {
+			if (!('lookup' in options)) {
+				options.lookup = this.lookup;
+			}
+
+			return agent[kCacheableLookupCreateConnection](options, callback);
+		};
+	}
+
+	uninstall(agent) {
+		verifyAgent(agent);
+
+		if (agent[kCacheableLookupCreateConnection]) {
+			if (agent[kCacheableLookupInstance] !== this) {
+				throw new Error('The agent is not owned by this CacheableLookup instance');
+			}
+
+			agent.createConnection = agent[kCacheableLookupCreateConnection];
+
+			delete agent[kCacheableLookupCreateConnection];
+			delete agent[kCacheableLookupInstance];
+		}
+	}
+
+	updateInterfaceInfo() {
+		const {_iface} = this;
+
+		this._iface = getIfaceInfo();
+
+		if ((_iface.has4 && !this._iface.has4) || (_iface.has6 && !this._iface.has6)) {
+			this._cache.clear();
+		}
+	}
+
+	clear(hostname) {
+		if (hostname) {
+			this._cache.delete(hostname);
+			return;
+		}
+
+		this._cache.clear();
+	}
+}
+
+module.exports = CacheableLookup;
+module.exports.default = CacheableLookup;
+
+
+/***/ }),
+
+/***/ 8116:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const EventEmitter = __nccwpck_require__(8614);
+const urlLib = __nccwpck_require__(8835);
+const normalizeUrl = __nccwpck_require__(7952);
+const getStream = __nccwpck_require__(1766);
+const CachePolicy = __nccwpck_require__(1002);
+const Response = __nccwpck_require__(9004);
+const lowercaseKeys = __nccwpck_require__(9662);
+const cloneResponse = __nccwpck_require__(1312);
+const Keyv = __nccwpck_require__(1531);
+
+class CacheableRequest {
+	constructor(request, cacheAdapter) {
+		if (typeof request !== 'function') {
+			throw new TypeError('Parameter `request` must be a function');
+		}
+
+		this.cache = new Keyv({
+			uri: typeof cacheAdapter === 'string' && cacheAdapter,
+			store: typeof cacheAdapter !== 'string' && cacheAdapter,
+			namespace: 'cacheable-request'
+		});
+
+		return this.createCacheableRequest(request);
+	}
+
+	createCacheableRequest(request) {
+		return (opts, cb) => {
+			let url;
+			if (typeof opts === 'string') {
+				url = normalizeUrlObject(urlLib.parse(opts));
+				opts = {};
+			} else if (opts instanceof urlLib.URL) {
+				url = normalizeUrlObject(urlLib.parse(opts.toString()));
+				opts = {};
+			} else {
+				const [pathname, ...searchParts] = (opts.path || '').split('?');
+				const search = searchParts.length > 0 ?
+					`?${searchParts.join('?')}` :
+					'';
+				url = normalizeUrlObject({ ...opts, pathname, search });
+			}
+
+			opts = {
+				headers: {},
+				method: 'GET',
+				cache: true,
+				strictTtl: false,
+				automaticFailover: false,
+				...opts,
+				...urlObjectToRequestOptions(url)
+			};
+			opts.headers = lowercaseKeys(opts.headers);
+
+			const ee = new EventEmitter();
+			const normalizedUrlString = normalizeUrl(
+				urlLib.format(url),
+				{
+					stripWWW: false,
+					removeTrailingSlash: false,
+					stripAuthentication: false
+				}
+			);
+			const key = `${opts.method}:${normalizedUrlString}`;
+			let revalidate = false;
+			let madeRequest = false;
+
+			const makeRequest = opts => {
+				madeRequest = true;
+				let requestErrored = false;
+				let requestErrorCallback;
+
+				const requestErrorPromise = new Promise(resolve => {
+					requestErrorCallback = () => {
+						if (!requestErrored) {
+							requestErrored = true;
+							resolve();
+						}
+					};
+				});
+
+				const handler = response => {
+					if (revalidate && !opts.forceRefresh) {
+						response.status = response.statusCode;
+						const revalidatedPolicy = CachePolicy.fromObject(revalidate.cachePolicy).revalidatedPolicy(opts, response);
+						if (!revalidatedPolicy.modified) {
+							const headers = revalidatedPolicy.policy.responseHeaders();
+							response = new Response(revalidate.statusCode, headers, revalidate.body, revalidate.url);
+							response.cachePolicy = revalidatedPolicy.policy;
+							response.fromCache = true;
+						}
+					}
+
+					if (!response.fromCache) {
+						response.cachePolicy = new CachePolicy(opts, response, opts);
+						response.fromCache = false;
+					}
+
+					let clonedResponse;
+					if (opts.cache && response.cachePolicy.storable()) {
+						clonedResponse = cloneResponse(response);
+
+						(async () => {
+							try {
+								const bodyPromise = getStream.buffer(response);
+
+								await Promise.race([
+									requestErrorPromise,
+									new Promise(resolve => response.once('end', resolve))
+								]);
+
+								if (requestErrored) {
+									return;
+								}
+
+								const body = await bodyPromise;
+
+								const value = {
+									cachePolicy: response.cachePolicy.toObject(),
+									url: response.url,
+									statusCode: response.fromCache ? revalidate.statusCode : response.statusCode,
+									body
+								};
+
+								let ttl = opts.strictTtl ? response.cachePolicy.timeToLive() : undefined;
+								if (opts.maxTtl) {
+									ttl = ttl ? Math.min(ttl, opts.maxTtl) : opts.maxTtl;
+								}
+
+								await this.cache.set(key, value, ttl);
+							} catch (error) {
+								ee.emit('error', new CacheableRequest.CacheError(error));
+							}
+						})();
+					} else if (opts.cache && revalidate) {
+						(async () => {
+							try {
+								await this.cache.delete(key);
+							} catch (error) {
+								ee.emit('error', new CacheableRequest.CacheError(error));
+							}
+						})();
+					}
+
+					ee.emit('response', clonedResponse || response);
+					if (typeof cb === 'function') {
+						cb(clonedResponse || response);
+					}
+				};
+
+				try {
+					const req = request(opts, handler);
+					req.once('error', requestErrorCallback);
+					req.once('abort', requestErrorCallback);
+					ee.emit('request', req);
+				} catch (error) {
+					ee.emit('error', new CacheableRequest.RequestError(error));
+				}
+			};
+
+			(async () => {
+				const get = async opts => {
+					await Promise.resolve();
+
+					const cacheEntry = opts.cache ? await this.cache.get(key) : undefined;
+					if (typeof cacheEntry === 'undefined') {
+						return makeRequest(opts);
+					}
+
+					const policy = CachePolicy.fromObject(cacheEntry.cachePolicy);
+					if (policy.satisfiesWithoutRevalidation(opts) && !opts.forceRefresh) {
+						const headers = policy.responseHeaders();
+						const response = new Response(cacheEntry.statusCode, headers, cacheEntry.body, cacheEntry.url);
+						response.cachePolicy = policy;
+						response.fromCache = true;
+
+						ee.emit('response', response);
+						if (typeof cb === 'function') {
+							cb(response);
+						}
+					} else {
+						revalidate = cacheEntry;
+						opts.headers = policy.revalidationHeaders(opts);
+						makeRequest(opts);
+					}
+				};
+
+				const errorHandler = error => ee.emit('error', new CacheableRequest.CacheError(error));
+				this.cache.once('error', errorHandler);
+				ee.on('response', () => this.cache.removeListener('error', errorHandler));
+
+				try {
+					await get(opts);
+				} catch (error) {
+					if (opts.automaticFailover && !madeRequest) {
+						makeRequest(opts);
+					}
+
+					ee.emit('error', new CacheableRequest.CacheError(error));
+				}
+			})();
+
+			return ee;
+		};
+	}
+}
+
+function urlObjectToRequestOptions(url) {
+	const options = { ...url };
+	options.path = `${url.pathname || '/'}${url.search || ''}`;
+	delete options.pathname;
+	delete options.search;
+	return options;
+}
+
+function normalizeUrlObject(url) {
+	// If url was parsed by url.parse or new URL:
+	// - hostname will be set
+	// - host will be hostname[:port]
+	// - port will be set if it was explicit in the parsed string
+	// Otherwise, url was from request options:
+	// - hostname or host may be set
+	// - host shall not have port encoded
+	return {
+		protocol: url.protocol,
+		auth: url.auth,
+		hostname: url.hostname || url.host || 'localhost',
+		port: url.port,
+		pathname: url.pathname,
+		search: url.search
+	};
+}
+
+CacheableRequest.RequestError = class extends Error {
+	constructor(error) {
+		super(error.message);
+		this.name = 'RequestError';
+		Object.assign(this, error);
+	}
+};
+
+CacheableRequest.CacheError = class extends Error {
+	constructor(error) {
+		super(error.message);
+		this.name = 'CacheError';
+		Object.assign(this, error);
+	}
+};
+
+module.exports = CacheableRequest;
+
+
+/***/ }),
+
+/***/ 1312:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const PassThrough = __nccwpck_require__(2413).PassThrough;
+const mimicResponse = __nccwpck_require__(2610);
+
+const cloneResponse = response => {
+	if (!(response && response.pipe)) {
+		throw new TypeError('Parameter `response` must be a response stream.');
+	}
+
+	const clone = new PassThrough();
+	mimicResponse(response, clone);
+
+	return response.pipe(clone);
+};
+
+module.exports = cloneResponse;
+
+
+/***/ }),
+
+/***/ 2391:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const {Transform, PassThrough} = __nccwpck_require__(2413);
+const zlib = __nccwpck_require__(8761);
+const mimicResponse = __nccwpck_require__(3877);
+
+module.exports = response => {
+	const contentEncoding = (response.headers['content-encoding'] || '').toLowerCase();
+
+	if (!['gzip', 'deflate', 'br'].includes(contentEncoding)) {
+		return response;
+	}
+
+	// TODO: Remove this when targeting Node.js 12.
+	const isBrotli = contentEncoding === 'br';
+	if (isBrotli && typeof zlib.createBrotliDecompress !== 'function') {
+		response.destroy(new Error('Brotli is not supported on Node.js < 12'));
+		return response;
+	}
+
+	let isEmpty = true;
+
+	const checker = new Transform({
+		transform(data, _encoding, callback) {
+			isEmpty = false;
+
+			callback(null, data);
+		},
+
+		flush(callback) {
+			callback();
 		}
 	});
+
+	const finalStream = new PassThrough({
+		autoDestroy: false,
+		destroy(error, callback) {
+			response.destroy();
+
+			callback(error);
+		}
+	});
+
+	const decompressStream = isBrotli ? zlib.createBrotliDecompress() : zlib.createUnzip();
+
+	decompressStream.once('error', error => {
+		if (isEmpty && !response.readable) {
+			finalStream.end();
+			return;
+		}
+
+		finalStream.destroy(error);
+	});
+
+	mimicResponse(response, finalStream);
+	response.pipe(checker).pipe(decompressStream).pipe(finalStream);
+
+	return finalStream;
 };
 
 
 /***/ }),
 
-/***/ 8201:
+/***/ 3877:
 /***/ ((module) => {
 
 "use strict";
 
 
-module.exports = collapse
+// We define these manually to ensure they're always copied
+// even if they would move up the prototype chain
+// https://nodejs.org/api/http.html#http_class_http_incomingmessage
+const knownProperties = [
+	'aborted',
+	'complete',
+	'headers',
+	'httpVersion',
+	'httpVersionMinor',
+	'httpVersionMajor',
+	'method',
+	'rawHeaders',
+	'rawTrailers',
+	'setTimeout',
+	'socket',
+	'statusCode',
+	'statusMessage',
+	'trailers',
+	'url'
+];
 
-// `collapse(' \t\nbar \nbaz\t') // ' bar baz '`
-function collapse(value) {
-  return String(value).replace(/\s+/g, ' ')
-}
-
-
-/***/ }),
-
-/***/ 594:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-var path = __nccwpck_require__(5622);
-var fs = __nccwpck_require__(7758);
-var osenv = __nccwpck_require__(4669);
-var assign = __nccwpck_require__(7426);
-var mkdirp = __nccwpck_require__(6186);
-var uuid = __nccwpck_require__(9197);
-var xdgBasedir = __nccwpck_require__(3522);
-var osTmpdir = __nccwpck_require__(1284);
-var writeFileAtomic = __nccwpck_require__(6750);
-var dotProp = __nccwpck_require__(2042);
-
-var user = (osenv.user() || uuid.v4()).replace(/\\/g, '');
-var configDir = xdgBasedir.config || path.join(osTmpdir(), user, '.config');
-var permissionError = 'You don\'t have access to this file.';
-var defaultPathMode = parseInt('0700', 8);
-var writeFileOptions = {mode: parseInt('0600', 8)};
-
-function Configstore(id, defaults, opts) {
-	opts = opts || {};
-
-	var pathPrefix = opts.globalConfigPath ?
-		path.join(id, 'config.json') :
-		path.join('configstore', id + '.json');
-
-	this.path = path.join(configDir, pathPrefix);
-
-	this.all = assign({}, defaults || {}, this.all || {});
-}
-
-Configstore.prototype = Object.create(Object.prototype, {
-	all: {
-		get: function () {
-			try {
-				return JSON.parse(fs.readFileSync(this.path, 'utf8'));
-			} catch (err) {
-				// create dir if it doesn't exist
-				if (err.code === 'ENOENT') {
-					mkdirp.sync(path.dirname(this.path), defaultPathMode);
-					return {};
-				}
-
-				// improve the message of permission errors
-				if (err.code === 'EACCES') {
-					err.message = err.message + '\n' + permissionError + '\n';
-				}
-
-				// empty the file if it encounters invalid JSON
-				if (err.name === 'SyntaxError') {
-					writeFileAtomic.sync(this.path, '', writeFileOptions);
-					return {};
-				}
-
-				throw err;
-			}
-		},
-		set: function (val) {
-			try {
-				// make sure the folder exists as it
-				// could have been deleted in the meantime
-				mkdirp.sync(path.dirname(this.path), defaultPathMode);
-
-				writeFileAtomic.sync(this.path, JSON.stringify(val, null, '\t'), writeFileOptions);
-			} catch (err) {
-				// improve the message of permission errors
-				if (err.code === 'EACCES') {
-					err.message = err.message + '\n' + permissionError + '\n';
-				}
-
-				throw err;
-			}
-		}
-	},
-	size: {
-		get: function () {
-			return Object.keys(this.all || {}).length;
-		}
+module.exports = (fromStream, toStream) => {
+	if (toStream._readableState.autoDestroy) {
+		throw new Error('The second stream must have the `autoDestroy` option set to `false`');
 	}
-});
 
-Configstore.prototype.get = function (key) {
-	return dotProp.get(this.all, key);
-};
+	const fromProperties = new Set(Object.keys(fromStream).concat(knownProperties));
 
-Configstore.prototype.set = function (key, val) {
-	var config = this.all;
-	if (arguments.length === 1) {
-		Object.keys(key).forEach(function (k) {
-			dotProp.set(config, k, key[k]);
-		});
-	} else {
-		dotProp.set(config, key, val);
+	const properties = {};
+
+	for (const property of fromProperties) {
+		// Don't overwrite existing properties.
+		if (property in toStream) {
+			continue;
+		}
+
+		properties[property] = {
+			get() {
+				const value = fromStream[property];
+				const isFunction = typeof value === 'function';
+
+				return isFunction ? value.bind(fromStream) : value;
+			},
+			set(value) {
+				fromStream[property] = value;
+			},
+			enumerable: true,
+			configurable: false
+		};
 	}
-	this.all = config;
-};
 
-Configstore.prototype.has = function (key) {
-	return dotProp.has(this.all, key);
-};
+	Object.defineProperties(toStream, properties);
 
-Configstore.prototype.delete = Configstore.prototype.del = function (key) {
-	var config = this.all;
-	dotProp.delete(config, key);
-	this.all = config;
-};
+	fromStream.once('aborted', () => {
+		toStream.destroy();
 
-Configstore.prototype.clear = function () {
-	this.all = {};
-};
+		toStream.emit('aborted');
+	});
 
-module.exports = Configstore;
-
-
-/***/ }),
-
-/***/ 6750:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-module.exports = writeFile
-module.exports.sync = writeFileSync
-module.exports._getTmpname = getTmpname // for testing
-
-var fs = __nccwpck_require__(7758)
-var chain = __nccwpck_require__(6029).chain
-var MurmurHash3 = __nccwpck_require__(2527)
-var extend = Object.assign || __nccwpck_require__(1669)._extend
-
-var invocations = 0
-function getTmpname (filename) {
-  return filename + '.' +
-    MurmurHash3(__filename)
-      .hash(String(process.pid))
-      .hash(String(++invocations))
-      .result()
-}
-
-function writeFile (filename, data, options, callback) {
-  if (options instanceof Function) {
-    callback = options
-    options = null
-  }
-  if (!options) options = {}
-  fs.realpath(filename, function (_, realname) {
-    _writeFile(realname || filename, data, options, callback)
-  })
-}
-function _writeFile (filename, data, options, callback) {
-  var tmpfile = getTmpname(filename)
-
-  if (options.mode && options.chown) {
-    return thenWriteFile()
-  } else {
-    // Either mode or chown is not explicitly set
-    // Default behavior is to copy it from original file
-    return fs.stat(filename, function (err, stats) {
-      if (err || !stats) return thenWriteFile()
-
-      options = extend({}, options)
-      if (!options.mode) {
-        options.mode = stats.mode
-      }
-      if (!options.chown && process.getuid) {
-        options.chown = { uid: stats.uid, gid: stats.gid }
-      }
-      return thenWriteFile()
-    })
-  }
-
-  function thenWriteFile () {
-    chain([
-      [writeFileAsync, tmpfile, data, options.mode, options.encoding || 'utf8'],
-      options.chown && [fs, fs.chown, tmpfile, options.chown.uid, options.chown.gid],
-      options.mode && [fs, fs.chmod, tmpfile, options.mode],
-      [fs, fs.rename, tmpfile, filename]
-    ], function (err) {
-      err ? fs.unlink(tmpfile, function () { callback(err) })
-        : callback()
-    })
-  }
-
-  // doing this instead of `fs.writeFile` in order to get the ability to
-  // call `fsync`.
-  function writeFileAsync (file, data, mode, encoding, cb) {
-    fs.open(file, 'w', options.mode, function (err, fd) {
-      if (err) return cb(err)
-      if (Buffer.isBuffer(data)) {
-        return fs.write(fd, data, 0, data.length, 0, syncAndClose)
-      } else if (data != null) {
-        return fs.write(fd, String(data), 0, String(encoding), syncAndClose)
-      } else {
-        return syncAndClose()
-      }
-      function syncAndClose (err) {
-        if (err) return cb(err)
-        fs.fsync(fd, function (err) {
-          if (err) return cb(err)
-          fs.close(fd, cb)
-        })
-      }
-    })
-  }
-}
-
-function writeFileSync (filename, data, options) {
-  if (!options) options = {}
-  try {
-    filename = fs.realpathSync(filename)
-  } catch (ex) {
-    // it's ok, it'll happen on a not yet existing file
-  }
-  var tmpfile = getTmpname(filename)
-
-  try {
-    if (!options.mode || !options.chown) {
-      // Either mode or chown is not explicitly set
-      // Default behavior is to copy it from original file
-      try {
-        var stats = fs.statSync(filename)
-        options = extend({}, options)
-        if (!options.mode) {
-          options.mode = stats.mode
-        }
-        if (!options.chown && process.getuid) {
-          options.chown = { uid: stats.uid, gid: stats.gid }
-        }
-      } catch (ex) {
-        // ignore stat errors
-      }
-    }
-
-    var fd = fs.openSync(tmpfile, 'w', options.mode)
-    if (Buffer.isBuffer(data)) {
-      fs.writeSync(fd, data, 0, data.length, 0)
-    } else if (data != null) {
-      fs.writeSync(fd, String(data), 0, String(options.encoding || 'utf8'))
-    }
-    fs.fsyncSync(fd)
-    fs.closeSync(fd)
-    if (options.chown) fs.chownSync(tmpfile, options.chown.uid, options.chown.gid)
-    if (options.mode) fs.chmodSync(tmpfile, options.mode)
-    fs.renameSync(tmpfile, filename)
-  } catch (err) {
-    try { fs.unlinkSync(tmpfile) } catch (e) {}
-    throw err
-  }
-}
-
-
-/***/ }),
-
-/***/ 4532:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-var captureStackTrace = __nccwpck_require__(6582);
-
-function inherits(ctor, superCtor) {
-	ctor.super_ = superCtor;
-	ctor.prototype = Object.create(superCtor.prototype, {
-		constructor: {
-			value: ctor,
-			enumerable: false,
-			writable: true,
-			configurable: true
+	fromStream.once('close', () => {
+		if (fromStream.complete) {
+			if (toStream.readable) {
+				toStream.once('end', () => {
+					toStream.emit('close');
+				});
+			} else {
+				toStream.emit('close');
+			}
+		} else {
+			toStream.emit('close');
 		}
 	});
-}
 
-module.exports = function createErrorClass(className, setup) {
-	if (typeof className !== 'string') {
-		throw new TypeError('Expected className to be a string');
-	}
-
-	if (/[^0-9a-zA-Z_$]/.test(className)) {
-		throw new Error('className contains invalid characters');
-	}
-
-	setup = setup || function (message) {
-		this.message = message;
-	};
-
-	var ErrorClass = function () {
-		Object.defineProperty(this, 'name', {
-			configurable: true,
-			value: className,
-			writable: true
-		});
-
-		captureStackTrace(this, this.constructor);
-
-		setup.apply(this, arguments);
-	};
-
-	inherits(ErrorClass, Error);
-
-	return ErrorClass;
+	return toStream;
 };
+
+
+/***/ }),
+
+/***/ 6214:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const tls_1 = __nccwpck_require__(4016);
+const deferToConnect = (socket, fn) => {
+    let listeners;
+    if (typeof fn === 'function') {
+        const connect = fn;
+        listeners = { connect };
+    }
+    else {
+        listeners = fn;
+    }
+    const hasConnectListener = typeof listeners.connect === 'function';
+    const hasSecureConnectListener = typeof listeners.secureConnect === 'function';
+    const hasCloseListener = typeof listeners.close === 'function';
+    const onConnect = () => {
+        if (hasConnectListener) {
+            listeners.connect();
+        }
+        if (socket instanceof tls_1.TLSSocket && hasSecureConnectListener) {
+            if (socket.authorized) {
+                listeners.secureConnect();
+            }
+            else if (!socket.authorizationError) {
+                socket.once('secureConnect', listeners.secureConnect);
+            }
+        }
+        if (hasCloseListener) {
+            socket.once('close', listeners.close);
+        }
+    };
+    if (socket.writable && !socket.connecting) {
+        onConnect();
+    }
+    else if (socket.connecting) {
+        socket.once('connect', onConnect);
+    }
+    else if (socket.destroyed && hasCloseListener) {
+        listeners.close(socket._hadError);
+    }
+};
+exports.default = deferToConnect;
+// For CommonJS default export support
+module.exports = deferToConnect;
+module.exports.default = deferToConnect;
 
 
 /***/ }),
@@ -4202,557 +5764,103 @@ exports.Deprecation = Deprecation;
 
 /***/ }),
 
-/***/ 2042:
+/***/ 1205:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
+var once = __nccwpck_require__(1223);
 
-var isObj = __nccwpck_require__(1389);
+var noop = function() {};
 
-module.exports.get = function (obj, path) {
-	if (!isObj(obj) || typeof path !== 'string') {
-		return obj;
-	}
-
-	var pathArr = getPathSegments(path);
-
-	for (var i = 0; i < pathArr.length; i++) {
-		var descriptor = Object.getOwnPropertyDescriptor(obj, pathArr[i]) || Object.getOwnPropertyDescriptor(Object.prototype, pathArr[i]);
-		if (descriptor && !descriptor.enumerable) {
-			return;
-		}
-
-		obj = obj[pathArr[i]];
-
-		if (obj === undefined || obj === null) {
-			// `obj` is either `undefined` or `null` so we want to stop the loop, and
-			// if this is not the last bit of the path, and
-			// if it did't return `undefined`
-			// it would return `null` if `obj` is `null`
-			// but we want `get({foo: null}, 'foo.bar')` to equal `undefined` not `null`
-			if (i !== pathArr.length - 1) {
-				return undefined;
-			}
-
-			break;
-		}
-	}
-
-	return obj;
+var isRequest = function(stream) {
+	return stream.setHeader && typeof stream.abort === 'function';
 };
 
-module.exports.set = function (obj, path, value) {
-	if (!isObj(obj) || typeof path !== 'string') {
-		return;
-	}
-
-	var pathArr = getPathSegments(path);
-
-	for (var i = 0; i < pathArr.length; i++) {
-		var p = pathArr[i];
-
-		if (!isObj(obj[p])) {
-			obj[p] = {};
-		}
-
-		if (i === pathArr.length - 1) {
-			obj[p] = value;
-		}
-
-		obj = obj[p];
-	}
+var isChildProcess = function(stream) {
+	return stream.stdio && Array.isArray(stream.stdio) && stream.stdio.length === 3
 };
 
-module.exports.delete = function (obj, path) {
-	if (!isObj(obj) || typeof path !== 'string') {
-		return;
+var eos = function(stream, opts, callback) {
+	if (typeof opts === 'function') return eos(stream, null, opts);
+	if (!opts) opts = {};
+
+	callback = once(callback || noop);
+
+	var ws = stream._writableState;
+	var rs = stream._readableState;
+	var readable = opts.readable || (opts.readable !== false && stream.readable);
+	var writable = opts.writable || (opts.writable !== false && stream.writable);
+	var cancelled = false;
+
+	var onlegacyfinish = function() {
+		if (!stream.writable) onfinish();
+	};
+
+	var onfinish = function() {
+		writable = false;
+		if (!readable) callback.call(stream);
+	};
+
+	var onend = function() {
+		readable = false;
+		if (!writable) callback.call(stream);
+	};
+
+	var onexit = function(exitCode) {
+		callback.call(stream, exitCode ? new Error('exited with error code: ' + exitCode) : null);
+	};
+
+	var onerror = function(err) {
+		callback.call(stream, err);
+	};
+
+	var onclose = function() {
+		process.nextTick(onclosenexttick);
+	};
+
+	var onclosenexttick = function() {
+		if (cancelled) return;
+		if (readable && !(rs && (rs.ended && !rs.destroyed))) return callback.call(stream, new Error('premature close'));
+		if (writable && !(ws && (ws.ended && !ws.destroyed))) return callback.call(stream, new Error('premature close'));
+	};
+
+	var onrequest = function() {
+		stream.req.on('finish', onfinish);
+	};
+
+	if (isRequest(stream)) {
+		stream.on('complete', onfinish);
+		stream.on('abort', onclose);
+		if (stream.req) onrequest();
+		else stream.on('request', onrequest);
+	} else if (writable && !ws) { // legacy streams
+		stream.on('end', onlegacyfinish);
+		stream.on('close', onlegacyfinish);
 	}
 
-	var pathArr = getPathSegments(path);
+	if (isChildProcess(stream)) stream.on('exit', onexit);
 
-	for (var i = 0; i < pathArr.length; i++) {
-		var p = pathArr[i];
+	stream.on('end', onend);
+	stream.on('finish', onfinish);
+	if (opts.error !== false) stream.on('error', onerror);
+	stream.on('close', onclose);
 
-		if (i === pathArr.length - 1) {
-			delete obj[p];
-			return;
-		}
-
-		obj = obj[p];
-	}
+	return function() {
+		cancelled = true;
+		stream.removeListener('complete', onfinish);
+		stream.removeListener('abort', onclose);
+		stream.removeListener('request', onrequest);
+		if (stream.req) stream.req.removeListener('finish', onfinish);
+		stream.removeListener('end', onlegacyfinish);
+		stream.removeListener('close', onlegacyfinish);
+		stream.removeListener('finish', onfinish);
+		stream.removeListener('exit', onexit);
+		stream.removeListener('end', onend);
+		stream.removeListener('error', onerror);
+		stream.removeListener('close', onclose);
+	};
 };
 
-module.exports.has = function (obj, path) {
-	if (!isObj(obj) || typeof path !== 'string') {
-		return false;
-	}
-
-	var pathArr = getPathSegments(path);
-
-	for (var i = 0; i < pathArr.length; i++) {
-		obj = obj[pathArr[i]];
-
-		if (obj === undefined) {
-			return false;
-		}
-	}
-
-	return true;
-};
-
-function getPathSegments(path) {
-	var pathArr = path.split('.');
-	var parts = [];
-
-	for (var i = 0; i < pathArr.length; i++) {
-		var p = pathArr[i];
-
-		while (p[p.length - 1] === '\\' && pathArr[i + 1] !== undefined) {
-			p = p.slice(0, -1) + '.';
-			p += pathArr[++i];
-		}
-
-		parts.push(p);
-	}
-
-	return parts;
-}
-
-
-/***/ }),
-
-/***/ 7994:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-var stream = __nccwpck_require__(2413);
-
-function DuplexWrapper(options, writable, readable) {
-  if (typeof readable === "undefined") {
-    readable = writable;
-    writable = options;
-    options = null;
-  }
-
-  stream.Duplex.call(this, options);
-
-  if (typeof readable.read !== "function") {
-    readable = (new stream.Readable(options)).wrap(readable);
-  }
-
-  this._writable = writable;
-  this._readable = readable;
-  this._waiting = false;
-
-  var self = this;
-
-  writable.once("finish", function() {
-    self.end();
-  });
-
-  this.once("finish", function() {
-    writable.end();
-  });
-
-  readable.on("readable", function() {
-    if (self._waiting) {
-      self._waiting = false;
-      self._read();
-    }
-  });
-
-  readable.once("end", function() {
-    self.push(null);
-  });
-
-  if (!options || typeof options.bubbleErrors === "undefined" || options.bubbleErrors) {
-    writable.on("error", function(err) {
-      self.emit("error", err);
-    });
-
-    readable.on("error", function(err) {
-      self.emit("error", err);
-    });
-  }
-}
-
-DuplexWrapper.prototype = Object.create(stream.Duplex.prototype, {constructor: {value: DuplexWrapper}});
-
-DuplexWrapper.prototype._write = function _write(input, encoding, done) {
-  this._writable.write(input, encoding, done);
-};
-
-DuplexWrapper.prototype._read = function _read() {
-  var buf;
-  var reads = 0;
-  while ((buf = this._readable.read()) !== null) {
-    this.push(buf);
-    reads++;
-  }
-  if (reads === 0) {
-    this._waiting = true;
-  }
-};
-
-module.exports = function duplex2(options, writable, readable) {
-  return new DuplexWrapper(options, writable, readable);
-};
-
-module.exports.DuplexWrapper = DuplexWrapper;
-
-
-/***/ }),
-
-/***/ 8950:
-/***/ ((module) => {
-
-// This file is generated by `build.js`.
-module.exports = {
-  cmn: /[\u2E80-\u2E99\u2E9B-\u2EF3\u2F00-\u2FD5\u3005\u3007\u3021-\u3029\u3038-\u303B\u3400-\u4DB5\u4E00-\u9FEF\uF900-\uFA6D\uFA70-\uFAD9]|[\uD840-\uD868\uD86A-\uD86C\uD86F-\uD872\uD874-\uD879][\uDC00-\uDFFF]|\uD869[\uDC00-\uDED6\uDF00-\uDFFF]|\uD86D[\uDC00-\uDF34\uDF40-\uDFFF]|\uD86E[\uDC00-\uDC1D\uDC20-\uDFFF]|\uD873[\uDC00-\uDEA1\uDEB0-\uDFFF]|\uD87A[\uDC00-\uDFE0]|\uD87E[\uDC00-\uDE1D]/g,
-  Latin: /[A-Za-z\xAA\xBA\xC0-\xD6\xD8-\xF6\xF8-\u02B8\u02E0-\u02E4\u1D00-\u1D25\u1D2C-\u1D5C\u1D62-\u1D65\u1D6B-\u1D77\u1D79-\u1DBE\u1E00-\u1EFF\u2071\u207F\u2090-\u209C\u212A\u212B\u2132\u214E\u2160-\u2188\u2C60-\u2C7F\uA722-\uA787\uA78B-\uA7BF\uA7C2-\uA7C6\uA7F7-\uA7FF\uAB30-\uAB5A\uAB5C-\uAB64\uAB66\uAB67\uFB00-\uFB06\uFF21-\uFF3A\uFF41-\uFF5A]/g,
-  Cyrillic: /[\u0400-\u0484\u0487-\u052F\u1C80-\u1C88\u1D2B\u1D78\u2DE0-\u2DFF\uA640-\uA69F\uFE2E\uFE2F]/g,
-  Arabic: /[\u0600-\u0604\u0606-\u060B\u060D-\u061A\u061C\u061E\u0620-\u063F\u0641-\u064A\u0656-\u066F\u0671-\u06DC\u06DE-\u06FF\u0750-\u077F\u08A0-\u08B4\u08B6-\u08BD\u08D3-\u08E1\u08E3-\u08FF\uFB50-\uFBC1\uFBD3-\uFD3D\uFD50-\uFD8F\uFD92-\uFDC7\uFDF0-\uFDFD\uFE70-\uFE74\uFE76-\uFEFC]|\uD803[\uDE60-\uDE7E]|\uD83B[\uDE00-\uDE03\uDE05-\uDE1F\uDE21\uDE22\uDE24\uDE27\uDE29-\uDE32\uDE34-\uDE37\uDE39\uDE3B\uDE42\uDE47\uDE49\uDE4B\uDE4D-\uDE4F\uDE51\uDE52\uDE54\uDE57\uDE59\uDE5B\uDE5D\uDE5F\uDE61\uDE62\uDE64\uDE67-\uDE6A\uDE6C-\uDE72\uDE74-\uDE77\uDE79-\uDE7C\uDE7E\uDE80-\uDE89\uDE8B-\uDE9B\uDEA1-\uDEA3\uDEA5-\uDEA9\uDEAB-\uDEBB\uDEF0\uDEF1]/g,
-  ben: /[\u0980-\u0983\u0985-\u098C\u098F\u0990\u0993-\u09A8\u09AA-\u09B0\u09B2\u09B6-\u09B9\u09BC-\u09C4\u09C7\u09C8\u09CB-\u09CE\u09D7\u09DC\u09DD\u09DF-\u09E3\u09E6-\u09FE]/g,
-  Devanagari: /[\u0900-\u0950\u0955-\u0963\u0966-\u097F\uA8E0-\uA8FF]/g,
-  jpn: /[\u3041-\u3096\u309D-\u309F]|\uD82C[\uDC01-\uDD1E\uDD50-\uDD52]|\uD83C\uDE00|[\u30A1-\u30FA\u30FD-\u30FF\u31F0-\u31FF\u32D0-\u32FE\u3300-\u3357\uFF66-\uFF6F\uFF71-\uFF9D]|\uD82C[\uDC00\uDD64-\uDD67]|[㐀-䶵一-龯]/g,
-  kor: /[\u1100-\u11FF\u302E\u302F\u3131-\u318E\u3200-\u321E\u3260-\u327E\uA960-\uA97C\uAC00-\uD7A3\uD7B0-\uD7C6\uD7CB-\uD7FB\uFFA0-\uFFBE\uFFC2-\uFFC7\uFFCA-\uFFCF\uFFD2-\uFFD7\uFFDA-\uFFDC]/g,
-  tel: /[\u0C00-\u0C0C\u0C0E-\u0C10\u0C12-\u0C28\u0C2A-\u0C39\u0C3D-\u0C44\u0C46-\u0C48\u0C4A-\u0C4D\u0C55\u0C56\u0C58-\u0C5A\u0C60-\u0C63\u0C66-\u0C6F\u0C77-\u0C7F]/g,
-  tam: /[\u0B82\u0B83\u0B85-\u0B8A\u0B8E-\u0B90\u0B92-\u0B95\u0B99\u0B9A\u0B9C\u0B9E\u0B9F\u0BA3\u0BA4\u0BA8-\u0BAA\u0BAE-\u0BB9\u0BBE-\u0BC2\u0BC6-\u0BC8\u0BCA-\u0BCD\u0BD0\u0BD7\u0BE6-\u0BFA]|\uD807[\uDFC0-\uDFF1\uDFFF]/g,
-  guj: /[\u0A81-\u0A83\u0A85-\u0A8D\u0A8F-\u0A91\u0A93-\u0AA8\u0AAA-\u0AB0\u0AB2\u0AB3\u0AB5-\u0AB9\u0ABC-\u0AC5\u0AC7-\u0AC9\u0ACB-\u0ACD\u0AD0\u0AE0-\u0AE3\u0AE6-\u0AF1\u0AF9-\u0AFF]/g,
-  kan: /[\u0C80-\u0C8C\u0C8E-\u0C90\u0C92-\u0CA8\u0CAA-\u0CB3\u0CB5-\u0CB9\u0CBC-\u0CC4\u0CC6-\u0CC8\u0CCA-\u0CCD\u0CD5\u0CD6\u0CDE\u0CE0-\u0CE3\u0CE6-\u0CEF\u0CF1\u0CF2]/g,
-  mal: /[\u0D00-\u0D03\u0D05-\u0D0C\u0D0E-\u0D10\u0D12-\u0D44\u0D46-\u0D48\u0D4A-\u0D4F\u0D54-\u0D63\u0D66-\u0D7F]/g,
-  mya: /[\u1000-\u109F\uA9E0-\uA9FE\uAA60-\uAA7F]/g,
-  ori: /[\u0B01-\u0B03\u0B05-\u0B0C\u0B0F\u0B10\u0B13-\u0B28\u0B2A-\u0B30\u0B32\u0B33\u0B35-\u0B39\u0B3C-\u0B44\u0B47\u0B48\u0B4B-\u0B4D\u0B56\u0B57\u0B5C\u0B5D\u0B5F-\u0B63\u0B66-\u0B77]/g,
-  pan: /[\u0A01-\u0A03\u0A05-\u0A0A\u0A0F\u0A10\u0A13-\u0A28\u0A2A-\u0A30\u0A32\u0A33\u0A35\u0A36\u0A38\u0A39\u0A3C\u0A3E-\u0A42\u0A47\u0A48\u0A4B-\u0A4D\u0A51\u0A59-\u0A5C\u0A5E\u0A66-\u0A76]/g,
-  amh: /[\u1200-\u1248\u124A-\u124D\u1250-\u1256\u1258\u125A-\u125D\u1260-\u1288\u128A-\u128D\u1290-\u12B0\u12B2-\u12B5\u12B8-\u12BE\u12C0\u12C2-\u12C5\u12C8-\u12D6\u12D8-\u1310\u1312-\u1315\u1318-\u135A\u135D-\u137C\u1380-\u1399\u2D80-\u2D96\u2DA0-\u2DA6\u2DA8-\u2DAE\u2DB0-\u2DB6\u2DB8-\u2DBE\u2DC0-\u2DC6\u2DC8-\u2DCE\u2DD0-\u2DD6\u2DD8-\u2DDE\uAB01-\uAB06\uAB09-\uAB0E\uAB11-\uAB16\uAB20-\uAB26\uAB28-\uAB2E]/g,
-  tha: /[\u0E01-\u0E3A\u0E40-\u0E5B]/g,
-  sin: /[\u0D82\u0D83\u0D85-\u0D96\u0D9A-\u0DB1\u0DB3-\u0DBB\u0DBD\u0DC0-\u0DC6\u0DCA\u0DCF-\u0DD4\u0DD6\u0DD8-\u0DDF\u0DE6-\u0DEF\u0DF2-\u0DF4]|\uD804[\uDDE1-\uDDF4]/g,
-  ell: /[\u0370-\u0373\u0375-\u0377\u037A-\u037D\u037F\u0384\u0386\u0388-\u038A\u038C\u038E-\u03A1\u03A3-\u03E1\u03F0-\u03FF\u1D26-\u1D2A\u1D5D-\u1D61\u1D66-\u1D6A\u1DBF\u1F00-\u1F15\u1F18-\u1F1D\u1F20-\u1F45\u1F48-\u1F4D\u1F50-\u1F57\u1F59\u1F5B\u1F5D\u1F5F-\u1F7D\u1F80-\u1FB4\u1FB6-\u1FC4\u1FC6-\u1FD3\u1FD6-\u1FDB\u1FDD-\u1FEF\u1FF2-\u1FF4\u1FF6-\u1FFE\u2126\uAB65]|\uD800[\uDD40-\uDD8E\uDDA0]|\uD834[\uDE00-\uDE45]/g
-}
-
-
-/***/ }),
-
-/***/ 9554:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-// This file is generated by `build.js`
-
-
-/* Load `trigram-utils`. */
-var utilities = __nccwpck_require__(8683)
-
-/* Load `expressions` (regular expressions matching
- * scripts). */
-var expressions = __nccwpck_require__(8950)
-
-/* Load `data` (trigram information per language,
- * per script). */
-var data = __nccwpck_require__(7943)
-
-/* Expose `detectAll` on `detect`. */
-detect.all = detectAll
-
-/* Expose `detect`. */
-module.exports = detect
-
-/* Maximum sample length. */
-var MAX_LENGTH = 2048
-
-/* Minimum sample length. */
-var MIN_LENGTH = 10
-
-/* The maximum distance to add when a given trigram does
- * not exist in a trigram dictionary. */
-var MAX_DIFFERENCE = 300
-
-/* Construct trigram dictionaries. */
-;(function() {
-  var languages
-  var name
-  var trigrams
-  var model
-  var script
-  var weight
-
-  for (script in data) {
-    languages = data[script]
-
-    for (name in languages) {
-      model = languages[name].split('|')
-
-      weight = model.length
-
-      trigrams = {}
-
-      while (weight--) {
-        trigrams[model[weight]] = weight
-      }
-
-      languages[name] = trigrams
-    }
-  }
-})()
-
-/**
- * Get the most probable language for the given value.
- *
- * @param {string} value - The value to test.
- * @param {Object} options - Configuration.
- * @return {string} The most probable language.
- */
-function detect(value, options) {
-  return detectAll(value, options)[0][0]
-}
-
-/**
- * Get a list of probable languages the given value is
- * written in.
- *
- * @param {string} value - The value to test.
- * @param {Object} options - Configuration.
- * @return {Array.<Array.<string, number>>} An array
- *   containing language--distance tuples.
- */
-function detectAll(value, options) {
-  var settings = options || {}
-  var minLength = MIN_LENGTH
-  var only = [].concat(settings.whitelist || [], settings.only || [])
-  var ignore = [].concat(settings.blacklist || [], settings.ignore || [])
-  var script
-
-  if (settings.minLength !== null && settings.minLength !== undefined) {
-    minLength = settings.minLength
-  }
-
-  if (!value || value.length < minLength) {
-    return und()
-  }
-
-  value = value.slice(0, MAX_LENGTH)
-
-  /* Get the script which characters occur the most
-   * in `value`. */
-  script = getTopScript(value, expressions)
-
-  /* One languages exists for the most-used script. */
-  if (!(script[0] in data)) {
-    /* If no matches occured, such as a digit only string,
-     * or because the language is ignored, exit with `und`. */
-    if (script[1] === 0 || !allow(script[0], only, ignore)) {
-      return und()
-    }
-
-    return singleLanguageTuples(script[0])
-  }
-
-  /* Get all distances for a given script, and
-   * normalize the distance values. */
-  return normalize(
-    value,
-    getDistances(utilities.asTuples(value), data[script[0]], only, ignore)
-  )
-}
-
-/**
- * Normalize the difference for each tuple in
- * `distances`.
- *
- * @param {string} value - Value to normalize.
- * @param {Array.<Array.<string, number>>} distances
- *   - List of distances.
- * @return {Array.<Array.<string, number>>} - Normalized
- *   distances.
- */
-function normalize(value, distances) {
-  var min = distances[0][1]
-  var max = value.length * MAX_DIFFERENCE - min
-  var index = -1
-  var length = distances.length
-
-  while (++index < length) {
-    distances[index][1] = 1 - (distances[index][1] - min) / max || 0
-  }
-
-  return distances
-}
-
-/**
- * From `scripts`, get the most occurring expression for
- * `value`.
- *
- * @param {string} value - Value to check.
- * @param {Object.<RegExp>} scripts - Top-Scripts.
- * @return {Array} Top script and its
- *   occurrence percentage.
- */
-function getTopScript(value, scripts) {
-  var topCount = -1
-  var topScript
-  var script
-  var count
-
-  for (script in scripts) {
-    count = getOccurrence(value, scripts[script])
-
-    if (count > topCount) {
-      topCount = count
-      topScript = script
-    }
-  }
-
-  return [topScript, topCount]
-}
-
-/**
- * Get the occurrence ratio of `expression` for `value`.
- *
- * @param {string} value - Value to check.
- * @param {RegExp} expression - Code-point expression.
- * @return {number} Float between 0 and 1.
- */
-function getOccurrence(value, expression) {
-  var count = value.match(expression)
-
-  return (count ? count.length : 0) / value.length || 0
-}
-
-/**
- * Get the distance between an array of trigram--count
- * tuples, and multiple trigram dictionaries.
- *
- * @param {Array.<Array.<string, number>>} trigrams - An
- *   array containing trigram--count tuples.
- * @param {Object.<Object>} languages - multiple
- *   trigrams to test against.
- * @param {Array.<string>} only - Allowed languages; if
- *   non-empty, only included languages are kept.
- * @param {Array.<string>} ignore - Disallowed languages;
- *   included languages are ignored.
- * @return {Array.<Array.<string, number>>} An array
- *   containing language--distance tuples.
- */
-function getDistances(trigrams, languages, only, ignore) {
-  var distances = []
-  var language
-
-  languages = filterLanguages(languages, only, ignore)
-
-  for (language in languages) {
-    distances.push([language, getDistance(trigrams, languages[language])])
-  }
-
-  return distances.length === 0 ? und() : distances.sort(sort)
-}
-
-/**
- * Get the distance between an array of trigram--count
- * tuples, and a language dictionary.
- *
- * @param {Array.<Array.<string, number>>} trigrams - An
- *   array containing trigram--count tuples.
- * @param {Object.<number>} model - Object
- *   containing weighted trigrams.
- * @return {number} - The distance between the two.
- */
-function getDistance(trigrams, model) {
-  var distance = 0
-  var index = -1
-  var length = trigrams.length
-  var trigram
-  var difference
-
-  while (++index < length) {
-    trigram = trigrams[index]
-
-    if (trigram[0] in model) {
-      difference = trigram[1] - model[trigram[0]] - 1
-
-      if (difference < 0) {
-        difference = -difference
-      }
-    } else {
-      difference = MAX_DIFFERENCE
-    }
-
-    distance += difference
-  }
-
-  return distance
-}
-
-/**
- * Filter `languages` by removing languages in
- * `ignore`, or including languages in `only`.
- *
- * @param {Object.<Object>} languages - Languages
- *   to filter
- * @param {Array.<string>} only - Allowed languages; if
- *   non-empty, only included languages are kept.
- * @param {Array.<string>} ignore - Disallowed languages;
- *   included languages are ignored.
- * @return {Object.<Object>} - Filtered array of
- *   languages.
- */
-function filterLanguages(languages, only, ignore) {
-  var filteredLanguages
-  var language
-
-  if (only.length === 0 && ignore.length === 0) {
-    return languages
-  }
-
-  filteredLanguages = {}
-
-  for (language in languages) {
-    if (allow(language, only, ignore)) {
-      filteredLanguages[language] = languages[language]
-    }
-  }
-
-  return filteredLanguages
-}
-
-/**
- * Check if `language` can match according to settings.
- *
- * @param {string} language - Languages
- *   to filter
- * @param {Array.<string>} only - Allowed languages; if
- *   non-empty, only included languages are kept.
- * @param {Array.<string>} ignore - Disallowed languages;
- *   included languages are ignored.
- * @return {boolean} - Whether `language` can match
- */
-function allow(language, only, ignore) {
-  if (only.length === 0 && ignore.length === 0) {
-    return true
-  }
-
-  return (
-    (only.length === 0 || only.indexOf(language) !== -1) &&
-    ignore.indexOf(language) === -1
-  )
-}
-
-/* Create a single `und` tuple. */
-function und() {
-  return singleLanguageTuples('und')
-}
-
-/* Create a single tuple as a list of tuples from a given
- * language code. */
-function singleLanguageTuples(language) {
-  return [[language, 1]]
-}
-
-/* Deep regular sort on the number at `1` in both objects. */
-function sort(a, b) {
-  return a[1] - b[1]
-}
+module.exports = eos;
 
 
 /***/ }),
@@ -4762,53 +5870,54 @@ function sort(a, b) {
 
 "use strict";
 
-const PassThrough = __nccwpck_require__(2413).PassThrough;
+const {PassThrough: PassThroughStream} = __nccwpck_require__(2413);
 
-module.exports = opts => {
-	opts = Object.assign({}, opts);
+module.exports = options => {
+	options = {...options};
 
-	const array = opts.array;
-	let encoding = opts.encoding;
-	const buffer = encoding === 'buffer';
+	const {array} = options;
+	let {encoding} = options;
+	const isBuffer = encoding === 'buffer';
 	let objectMode = false;
 
 	if (array) {
-		objectMode = !(encoding || buffer);
+		objectMode = !(encoding || isBuffer);
 	} else {
 		encoding = encoding || 'utf8';
 	}
 
-	if (buffer) {
+	if (isBuffer) {
 		encoding = null;
 	}
 
-	let len = 0;
-	const ret = [];
-	const stream = new PassThrough({objectMode});
+	const stream = new PassThroughStream({objectMode});
 
 	if (encoding) {
 		stream.setEncoding(encoding);
 	}
 
+	let length = 0;
+	const chunks = [];
+
 	stream.on('data', chunk => {
-		ret.push(chunk);
+		chunks.push(chunk);
 
 		if (objectMode) {
-			len = ret.length;
+			length = chunks.length;
 		} else {
-			len += chunk.length;
+			length += chunk.length;
 		}
 	});
 
 	stream.getBufferedValue = () => {
 		if (array) {
-			return ret;
+			return chunks;
 		}
 
-		return buffer ? Buffer.concat(ret, len) : ret.join('');
+		return isBuffer ? Buffer.concat(chunks, length) : chunks.join('');
 	};
 
-	stream.getBufferedLength = () => len;
+	stream.getBufferedLength = () => length;
 
 	return stream;
 };
@@ -4821,2007 +5930,5268 @@ module.exports = opts => {
 
 "use strict";
 
+const {constants: BufferConstants} = __nccwpck_require__(4293);
+const pump = __nccwpck_require__(8341);
 const bufferStream = __nccwpck_require__(1585);
 
-function getStream(inputStream, opts) {
+class MaxBufferError extends Error {
+	constructor() {
+		super('maxBuffer exceeded');
+		this.name = 'MaxBufferError';
+	}
+}
+
+async function getStream(inputStream, options) {
 	if (!inputStream) {
 		return Promise.reject(new Error('Expected a stream'));
 	}
 
-	opts = Object.assign({maxBuffer: Infinity}, opts);
+	options = {
+		maxBuffer: Infinity,
+		...options
+	};
 
-	const maxBuffer = opts.maxBuffer;
+	const {maxBuffer} = options;
+
 	let stream;
-	let clean;
-
-	const p = new Promise((resolve, reject) => {
-		const error = err => {
-			if (err) { // null check
-				err.bufferedData = stream.getBufferedValue();
+	await new Promise((resolve, reject) => {
+		const rejectPromise = error => {
+			// Don't retrieve an oversized buffer.
+			if (error && stream.getBufferedLength() <= BufferConstants.MAX_LENGTH) {
+				error.bufferedData = stream.getBufferedValue();
 			}
 
-			reject(err);
+			reject(error);
 		};
 
-		stream = bufferStream(opts);
-		inputStream.once('error', error);
-		inputStream.pipe(stream);
+		stream = pump(inputStream, bufferStream(options), error => {
+			if (error) {
+				rejectPromise(error);
+				return;
+			}
+
+			resolve();
+		});
 
 		stream.on('data', () => {
 			if (stream.getBufferedLength() > maxBuffer) {
-				reject(new Error('maxBuffer exceeded'));
+				rejectPromise(new MaxBufferError());
 			}
 		});
-		stream.once('error', error);
-		stream.on('end', resolve);
-
-		clean = () => {
-			// some streams doesn't implement the `stream.Readable` interface correctly
-			if (inputStream.unpipe) {
-				inputStream.unpipe(stream);
-			}
-		};
 	});
 
-	p.then(clean, clean);
-
-	return p.then(() => stream.getBufferedValue());
+	return stream.getBufferedValue();
 }
 
 module.exports = getStream;
-module.exports.buffer = (stream, opts) => getStream(stream, Object.assign({}, opts, {encoding: 'buffer'}));
-module.exports.array = (stream, opts) => getStream(stream, Object.assign({}, opts, {array: true}));
+// TODO: Remove this for the next major release
+module.exports.default = getStream;
+module.exports.buffer = (stream, options) => getStream(stream, {...options, encoding: 'buffer'});
+module.exports.array = (stream, options) => getStream(stream, {...options, array: true});
+module.exports.MaxBufferError = MaxBufferError;
 
 
 /***/ }),
 
-/***/ 6505:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+/***/ 6457:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-var querystring = __nccwpck_require__(1191);
+"use strict";
 
-var got = __nccwpck_require__(3798);
-var safeEval = __nccwpck_require__(7380);
-var token = __nccwpck_require__(7637);
-
-var languages = __nccwpck_require__(2122);
-
-function translate(text, opts) {
-    opts = opts || {};
-
-    var e;
-    [opts.from, opts.to].forEach(function (lang) {
-        if (lang && !languages.isSupported(lang)) {
-            e = new Error();
-            e.code = 400;
-            e.message = 'The language \'' + lang + '\' is not supported';
-        }
-    });
-    if (e) {
-        return new Promise(function (resolve, reject) {
-            reject(e);
-        });
-    }
-
-    opts.from = opts.from || 'auto';
-    opts.to = opts.to || 'en';
-
-    opts.from = languages.getCode(opts.from);
-    opts.to = languages.getCode(opts.to);
-
-    return token.get(text).then(function (token) {
-        var url = 'https://translate.google.com/translate_a/single';
-        var data = {
-            client: 't',
-            sl: opts.from,
-            tl: opts.to,
-            hl: opts.to,
-            dt: ['at', 'bd', 'ex', 'ld', 'md', 'qca', 'rw', 'rm', 'ss', 't'],
-            ie: 'UTF-8',
-            oe: 'UTF-8',
-            otf: 1,
-            ssel: 0,
-            tsel: 0,
-            kc: 7,
-            q: text
-        };
-        data[token.name] = token.value;
-
-        return url + '?' + querystring.stringify(data);
-    }).then(function (url) {
-        return got(url).then(function (res) {
-            var result = {
-                text: '',
-                from: {
-                    language: {
-                        didYouMean: false,
-                        iso: ''
-                    },
-                    text: {
-                        autoCorrected: false,
-                        value: '',
-                        didYouMean: false
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const types_1 = __nccwpck_require__(4597);
+function createRejection(error, ...beforeErrorGroups) {
+    const promise = (async () => {
+        if (error instanceof types_1.RequestError) {
+            try {
+                for (const hooks of beforeErrorGroups) {
+                    if (hooks) {
+                        for (const hook of hooks) {
+                            // eslint-disable-next-line no-await-in-loop
+                            error = await hook(error);
+                        }
                     }
-                },
-                raw: ''
-            };
-
-            if (opts.raw) {
-                result.raw = res.body;
-            }
-
-            var body = safeEval(res.body);
-            body[0].forEach(function (obj) {
-                if (obj[0]) {
-                    result.text += obj[0];
-                }
-            });
-
-            if (body[2] === body[8][0][0]) {
-                result.from.language.iso = body[2];
-            } else {
-                result.from.language.didYouMean = true;
-                result.from.language.iso = body[8][0][0];
-            }
-
-            if (body[7] && body[7][0]) {
-                var str = body[7][0];
-
-                str = str.replace(/<b><i>/g, '[');
-                str = str.replace(/<\/i><\/b>/g, ']');
-
-                result.from.text.value = str;
-
-                if (body[7][5] === true) {
-                    result.from.text.autoCorrected = true;
-                } else {
-                    result.from.text.didYouMean = true;
                 }
             }
-
-            return result;
-        }).catch(function (err) {
-            var e;
-            e = new Error();
-            if (err.statusCode !== undefined && err.statusCode !== 200) {
-                e.code = 'BAD_REQUEST';
-            } else {
-                e.code = 'BAD_NETWORK';
+            catch (error_) {
+                error = error_;
             }
-            throw e;
-        });
-    });
+        }
+        throw error;
+    })();
+    const returnPromise = () => promise;
+    promise.json = returnPromise;
+    promise.text = returnPromise;
+    promise.buffer = returnPromise;
+    promise.on = returnPromise;
+    return promise;
 }
-
-module.exports = translate;
-module.exports.languages = languages;
+exports.default = createRejection;
 
 
 /***/ }),
 
-/***/ 2122:
-/***/ ((module) => {
+/***/ 6056:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const events_1 = __nccwpck_require__(8614);
+const is_1 = __nccwpck_require__(7678);
+const PCancelable = __nccwpck_require__(9072);
+const types_1 = __nccwpck_require__(4597);
+const parse_body_1 = __nccwpck_require__(8220);
+const core_1 = __nccwpck_require__(94);
+const proxy_events_1 = __nccwpck_require__(3021);
+const get_buffer_1 = __nccwpck_require__(4500);
+const is_response_ok_1 = __nccwpck_require__(9298);
+const proxiedRequestEvents = [
+    'request',
+    'response',
+    'redirect',
+    'uploadProgress',
+    'downloadProgress'
+];
+function asPromise(normalizedOptions) {
+    let globalRequest;
+    let globalResponse;
+    const emitter = new events_1.EventEmitter();
+    const promise = new PCancelable((resolve, reject, onCancel) => {
+        const makeRequest = (retryCount) => {
+            const request = new core_1.default(undefined, normalizedOptions);
+            request.retryCount = retryCount;
+            request._noPipe = true;
+            onCancel(() => request.destroy());
+            onCancel.shouldReject = false;
+            onCancel(() => reject(new types_1.CancelError(request)));
+            globalRequest = request;
+            request.once('response', async (response) => {
+                var _a;
+                response.retryCount = retryCount;
+                if (response.request.aborted) {
+                    // Canceled while downloading - will throw a `CancelError` or `TimeoutError` error
+                    return;
+                }
+                // Download body
+                let rawBody;
+                try {
+                    rawBody = await get_buffer_1.default(request);
+                    response.rawBody = rawBody;
+                }
+                catch (_b) {
+                    // The same error is caught below.
+                    // See request.once('error')
+                    return;
+                }
+                if (request._isAboutToError) {
+                    return;
+                }
+                // Parse body
+                const contentEncoding = ((_a = response.headers['content-encoding']) !== null && _a !== void 0 ? _a : '').toLowerCase();
+                const isCompressed = ['gzip', 'deflate', 'br'].includes(contentEncoding);
+                const { options } = request;
+                if (isCompressed && !options.decompress) {
+                    response.body = rawBody;
+                }
+                else {
+                    try {
+                        response.body = parse_body_1.default(response, options.responseType, options.parseJson, options.encoding);
+                    }
+                    catch (error) {
+                        // Fallback to `utf8`
+                        response.body = rawBody.toString();
+                        if (is_response_ok_1.isResponseOk(response)) {
+                            request._beforeError(error);
+                            return;
+                        }
+                    }
+                }
+                try {
+                    for (const [index, hook] of options.hooks.afterResponse.entries()) {
+                        // @ts-expect-error TS doesn't notice that CancelableRequest is a Promise
+                        // eslint-disable-next-line no-await-in-loop
+                        response = await hook(response, async (updatedOptions) => {
+                            const typedOptions = core_1.default.normalizeArguments(undefined, {
+                                ...updatedOptions,
+                                retry: {
+                                    calculateDelay: () => 0
+                                },
+                                throwHttpErrors: false,
+                                resolveBodyOnly: false
+                            }, options);
+                            // Remove any further hooks for that request, because we'll call them anyway.
+                            // The loop continues. We don't want duplicates (asPromise recursion).
+                            typedOptions.hooks.afterResponse = typedOptions.hooks.afterResponse.slice(0, index);
+                            for (const hook of typedOptions.hooks.beforeRetry) {
+                                // eslint-disable-next-line no-await-in-loop
+                                await hook(typedOptions);
+                            }
+                            const promise = asPromise(typedOptions);
+                            onCancel(() => {
+                                promise.catch(() => { });
+                                promise.cancel();
+                            });
+                            return promise;
+                        });
+                    }
+                }
+                catch (error) {
+                    request._beforeError(new types_1.RequestError(error.message, error, request));
+                    return;
+                }
+                if (!is_response_ok_1.isResponseOk(response)) {
+                    request._beforeError(new types_1.HTTPError(response));
+                    return;
+                }
+                globalResponse = response;
+                resolve(request.options.resolveBodyOnly ? response.body : response);
+            });
+            const onError = (error) => {
+                if (promise.isCanceled) {
+                    return;
+                }
+                const { options } = request;
+                if (error instanceof types_1.HTTPError && !options.throwHttpErrors) {
+                    const { response } = error;
+                    resolve(request.options.resolveBodyOnly ? response.body : response);
+                    return;
+                }
+                reject(error);
+            };
+            request.once('error', onError);
+            const previousBody = request.options.body;
+            request.once('retry', (newRetryCount, error) => {
+                var _a, _b;
+                if (previousBody === ((_a = error.request) === null || _a === void 0 ? void 0 : _a.options.body) && is_1.default.nodeStream((_b = error.request) === null || _b === void 0 ? void 0 : _b.options.body)) {
+                    onError(error);
+                    return;
+                }
+                makeRequest(newRetryCount);
+            });
+            proxy_events_1.default(request, emitter, proxiedRequestEvents);
+        };
+        makeRequest(0);
+    });
+    promise.on = (event, fn) => {
+        emitter.on(event, fn);
+        return promise;
+    };
+    const shortcut = (responseType) => {
+        const newPromise = (async () => {
+            // Wait until downloading has ended
+            await promise;
+            const { options } = globalResponse.request;
+            return parse_body_1.default(globalResponse, responseType, options.parseJson, options.encoding);
+        })();
+        Object.defineProperties(newPromise, Object.getOwnPropertyDescriptors(promise));
+        return newPromise;
+    };
+    promise.json = () => {
+        const { headers } = globalRequest.options;
+        if (!globalRequest.writableFinished && headers.accept === undefined) {
+            headers.accept = 'application/json';
+        }
+        return shortcut('json');
+    };
+    promise.buffer = () => shortcut('buffer');
+    promise.text = () => shortcut('text');
+    return promise;
+}
+exports.default = asPromise;
+__exportStar(__nccwpck_require__(4597), exports);
+
+
+/***/ }),
+
+/***/ 1048:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const is_1 = __nccwpck_require__(7678);
+const normalizeArguments = (options, defaults) => {
+    if (is_1.default.null_(options.encoding)) {
+        throw new TypeError('To get a Buffer, set `options.responseType` to `buffer` instead');
+    }
+    is_1.assert.any([is_1.default.string, is_1.default.undefined], options.encoding);
+    is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.resolveBodyOnly);
+    is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.methodRewriting);
+    is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.isStream);
+    is_1.assert.any([is_1.default.string, is_1.default.undefined], options.responseType);
+    // `options.responseType`
+    if (options.responseType === undefined) {
+        options.responseType = 'text';
+    }
+    // `options.retry`
+    const { retry } = options;
+    if (defaults) {
+        options.retry = { ...defaults.retry };
+    }
+    else {
+        options.retry = {
+            calculateDelay: retryObject => retryObject.computedValue,
+            limit: 0,
+            methods: [],
+            statusCodes: [],
+            errorCodes: [],
+            maxRetryAfter: undefined
+        };
+    }
+    if (is_1.default.object(retry)) {
+        options.retry = {
+            ...options.retry,
+            ...retry
+        };
+        options.retry.methods = [...new Set(options.retry.methods.map(method => method.toUpperCase()))];
+        options.retry.statusCodes = [...new Set(options.retry.statusCodes)];
+        options.retry.errorCodes = [...new Set(options.retry.errorCodes)];
+    }
+    else if (is_1.default.number(retry)) {
+        options.retry.limit = retry;
+    }
+    if (is_1.default.undefined(options.retry.maxRetryAfter)) {
+        options.retry.maxRetryAfter = Math.min(
+        // TypeScript is not smart enough to handle `.filter(x => is.number(x))`.
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+        ...[options.timeout.request, options.timeout.connect].filter(is_1.default.number));
+    }
+    // `options.pagination`
+    if (is_1.default.object(options.pagination)) {
+        if (defaults) {
+            options.pagination = {
+                ...defaults.pagination,
+                ...options.pagination
+            };
+        }
+        const { pagination } = options;
+        if (!is_1.default.function_(pagination.transform)) {
+            throw new Error('`options.pagination.transform` must be implemented');
+        }
+        if (!is_1.default.function_(pagination.shouldContinue)) {
+            throw new Error('`options.pagination.shouldContinue` must be implemented');
+        }
+        if (!is_1.default.function_(pagination.filter)) {
+            throw new TypeError('`options.pagination.filter` must be implemented');
+        }
+        if (!is_1.default.function_(pagination.paginate)) {
+            throw new Error('`options.pagination.paginate` must be implemented');
+        }
+    }
+    // JSON mode
+    if (options.responseType === 'json' && options.headers.accept === undefined) {
+        options.headers.accept = 'application/json';
+    }
+    return options;
+};
+exports.default = normalizeArguments;
+
+
+/***/ }),
+
+/***/ 8220:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const types_1 = __nccwpck_require__(4597);
+const parseBody = (response, responseType, parseJson, encoding) => {
+    const { rawBody } = response;
+    try {
+        if (responseType === 'text') {
+            return rawBody.toString(encoding);
+        }
+        if (responseType === 'json') {
+            return rawBody.length === 0 ? '' : parseJson(rawBody.toString());
+        }
+        if (responseType === 'buffer') {
+            return rawBody;
+        }
+        throw new types_1.ParseError({
+            message: `Unknown body type '${responseType}'`,
+            name: 'Error'
+        }, response);
+    }
+    catch (error) {
+        throw new types_1.ParseError(error, response);
+    }
+};
+exports.default = parseBody;
+
+
+/***/ }),
+
+/***/ 4597:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CancelError = exports.ParseError = void 0;
+const core_1 = __nccwpck_require__(94);
 /**
- *
- * Generated from https://translate.google.com
- *
- * The languages that Google Translate supports (as of 5/15/16) alongside with their ISO 639-1 codes
- * See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
- */
+An error to be thrown when server response code is 2xx, and parsing body fails.
+Includes a `response` property.
+*/
+class ParseError extends core_1.RequestError {
+    constructor(error, response) {
+        const { options } = response.request;
+        super(`${error.message} in "${options.url.toString()}"`, error, response.request);
+        this.name = 'ParseError';
+    }
+}
+exports.ParseError = ParseError;
+/**
+An error to be thrown when the request is aborted with `.cancel()`.
+*/
+class CancelError extends core_1.RequestError {
+    constructor(request) {
+        super('Promise was canceled', {}, request);
+        this.name = 'CancelError';
+    }
+    get isCanceled() {
+        return true;
+    }
+}
+exports.CancelError = CancelError;
+__exportStar(__nccwpck_require__(94), exports);
 
-var langs = {
-    'auto': 'Automatic',
-    'af': 'Afrikaans',
-    'sq': 'Albanian',
-    'am': 'Amharic',
-    'ar': 'Arabic',
-    'hy': 'Armenian',
-    'az': 'Azerbaijani',
-    'eu': 'Basque',
-    'be': 'Belarusian',
-    'bn': 'Bengali',
-    'bs': 'Bosnian',
-    'bg': 'Bulgarian',
-    'ca': 'Catalan',
-    'ceb': 'Cebuano',
-    'ny': 'Chichewa',
-    'zh-cn': 'Chinese Simplified',
-    'zh-tw': 'Chinese Traditional',
-    'co': 'Corsican',
-    'hr': 'Croatian',
-    'cs': 'Czech',
-    'da': 'Danish',
-    'nl': 'Dutch',
-    'en': 'English',
-    'eo': 'Esperanto',
-    'et': 'Estonian',
-    'tl': 'Filipino',
-    'fi': 'Finnish',
-    'fr': 'French',
-    'fy': 'Frisian',
-    'gl': 'Galician',
-    'ka': 'Georgian',
-    'de': 'German',
-    'el': 'Greek',
-    'gu': 'Gujarati',
-    'ht': 'Haitian Creole',
-    'ha': 'Hausa',
-    'haw': 'Hawaiian',
-    'iw': 'Hebrew',
-    'hi': 'Hindi',
-    'hmn': 'Hmong',
-    'hu': 'Hungarian',
-    'is': 'Icelandic',
-    'ig': 'Igbo',
-    'id': 'Indonesian',
-    'ga': 'Irish',
-    'it': 'Italian',
-    'ja': 'Japanese',
-    'jw': 'Javanese',
-    'kn': 'Kannada',
-    'kk': 'Kazakh',
-    'km': 'Khmer',
-    'ko': 'Korean',
-    'ku': 'Kurdish (Kurmanji)',
-    'ky': 'Kyrgyz',
-    'lo': 'Lao',
-    'la': 'Latin',
-    'lv': 'Latvian',
-    'lt': 'Lithuanian',
-    'lb': 'Luxembourgish',
-    'mk': 'Macedonian',
-    'mg': 'Malagasy',
-    'ms': 'Malay',
-    'ml': 'Malayalam',
-    'mt': 'Maltese',
-    'mi': 'Maori',
-    'mr': 'Marathi',
-    'mn': 'Mongolian',
-    'my': 'Myanmar (Burmese)',
-    'ne': 'Nepali',
-    'no': 'Norwegian',
-    'ps': 'Pashto',
-    'fa': 'Persian',
-    'pl': 'Polish',
-    'pt': 'Portuguese',
-    'ma': 'Punjabi',
-    'ro': 'Romanian',
-    'ru': 'Russian',
-    'sm': 'Samoan',
-    'gd': 'Scots Gaelic',
-    'sr': 'Serbian',
-    'st': 'Sesotho',
-    'sn': 'Shona',
-    'sd': 'Sindhi',
-    'si': 'Sinhala',
-    'sk': 'Slovak',
-    'sl': 'Slovenian',
-    'so': 'Somali',
-    'es': 'Spanish',
-    'su': 'Sundanese',
-    'sw': 'Swahili',
-    'sv': 'Swedish',
-    'tg': 'Tajik',
-    'ta': 'Tamil',
-    'te': 'Telugu',
-    'th': 'Thai',
-    'tr': 'Turkish',
-    'uk': 'Ukrainian',
-    'ur': 'Urdu',
-    'uz': 'Uzbek',
-    'vi': 'Vietnamese',
-    'cy': 'Welsh',
-    'xh': 'Xhosa',
-    'yi': 'Yiddish',
-    'yo': 'Yoruba',
-    'zu': 'Zulu'
+
+/***/ }),
+
+/***/ 3462:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.retryAfterStatusCodes = void 0;
+exports.retryAfterStatusCodes = new Set([413, 429, 503]);
+const calculateRetryDelay = ({ attemptCount, retryOptions, error, retryAfter }) => {
+    if (attemptCount > retryOptions.limit) {
+        return 0;
+    }
+    const hasMethod = retryOptions.methods.includes(error.options.method);
+    const hasErrorCode = retryOptions.errorCodes.includes(error.code);
+    const hasStatusCode = error.response && retryOptions.statusCodes.includes(error.response.statusCode);
+    if (!hasMethod || (!hasErrorCode && !hasStatusCode)) {
+        return 0;
+    }
+    if (error.response) {
+        if (retryAfter) {
+            if (retryOptions.maxRetryAfter === undefined || retryAfter > retryOptions.maxRetryAfter) {
+                return 0;
+            }
+            return retryAfter;
+        }
+        if (error.response.statusCode === 413) {
+            return 0;
+        }
+    }
+    const noise = Math.random() * 100;
+    return ((2 ** (attemptCount - 1)) * 1000) + noise;
+};
+exports.default = calculateRetryDelay;
+
+
+/***/ }),
+
+/***/ 94:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UnsupportedProtocolError = exports.ReadError = exports.TimeoutError = exports.UploadError = exports.CacheError = exports.HTTPError = exports.MaxRedirectsError = exports.RequestError = exports.setNonEnumerableProperties = exports.knownHookEvents = exports.withoutBody = exports.kIsNormalizedAlready = void 0;
+const util_1 = __nccwpck_require__(1669);
+const stream_1 = __nccwpck_require__(2413);
+const fs_1 = __nccwpck_require__(5747);
+const url_1 = __nccwpck_require__(8835);
+const http = __nccwpck_require__(8605);
+const http_1 = __nccwpck_require__(8605);
+const https = __nccwpck_require__(7211);
+const http_timer_1 = __nccwpck_require__(8097);
+const cacheable_lookup_1 = __nccwpck_require__(2286);
+const CacheableRequest = __nccwpck_require__(8116);
+const decompressResponse = __nccwpck_require__(2391);
+// @ts-expect-error Missing types
+const http2wrapper = __nccwpck_require__(4645);
+const lowercaseKeys = __nccwpck_require__(9662);
+const is_1 = __nccwpck_require__(7678);
+const get_body_size_1 = __nccwpck_require__(4564);
+const is_form_data_1 = __nccwpck_require__(40);
+const proxy_events_1 = __nccwpck_require__(3021);
+const timed_out_1 = __nccwpck_require__(2454);
+const url_to_options_1 = __nccwpck_require__(8026);
+const options_to_url_1 = __nccwpck_require__(9219);
+const weakable_map_1 = __nccwpck_require__(7288);
+const get_buffer_1 = __nccwpck_require__(4500);
+const dns_ip_version_1 = __nccwpck_require__(4993);
+const is_response_ok_1 = __nccwpck_require__(9298);
+const deprecation_warning_1 = __nccwpck_require__(397);
+const normalize_arguments_1 = __nccwpck_require__(1048);
+const calculate_retry_delay_1 = __nccwpck_require__(3462);
+const globalDnsCache = new cacheable_lookup_1.default();
+const kRequest = Symbol('request');
+const kResponse = Symbol('response');
+const kResponseSize = Symbol('responseSize');
+const kDownloadedSize = Symbol('downloadedSize');
+const kBodySize = Symbol('bodySize');
+const kUploadedSize = Symbol('uploadedSize');
+const kServerResponsesPiped = Symbol('serverResponsesPiped');
+const kUnproxyEvents = Symbol('unproxyEvents');
+const kIsFromCache = Symbol('isFromCache');
+const kCancelTimeouts = Symbol('cancelTimeouts');
+const kStartedReading = Symbol('startedReading');
+const kStopReading = Symbol('stopReading');
+const kTriggerRead = Symbol('triggerRead');
+const kBody = Symbol('body');
+const kJobs = Symbol('jobs');
+const kOriginalResponse = Symbol('originalResponse');
+const kRetryTimeout = Symbol('retryTimeout');
+exports.kIsNormalizedAlready = Symbol('isNormalizedAlready');
+const supportsBrotli = is_1.default.string(process.versions.brotli);
+exports.withoutBody = new Set(['GET', 'HEAD']);
+exports.knownHookEvents = [
+    'init',
+    'beforeRequest',
+    'beforeRedirect',
+    'beforeError',
+    'beforeRetry',
+    // Promise-Only
+    'afterResponse'
+];
+function validateSearchParameters(searchParameters) {
+    // eslint-disable-next-line guard-for-in
+    for (const key in searchParameters) {
+        const value = searchParameters[key];
+        if (!is_1.default.string(value) && !is_1.default.number(value) && !is_1.default.boolean(value) && !is_1.default.null_(value) && !is_1.default.undefined(value)) {
+            throw new TypeError(`The \`searchParams\` value '${String(value)}' must be a string, number, boolean or null`);
+        }
+    }
+}
+function isClientRequest(clientRequest) {
+    return is_1.default.object(clientRequest) && !('statusCode' in clientRequest);
+}
+const cacheableStore = new weakable_map_1.default();
+const waitForOpenFile = async (file) => new Promise((resolve, reject) => {
+    const onError = (error) => {
+        reject(error);
+    };
+    // Node.js 12 has incomplete types
+    if (!file.pending) {
+        resolve();
+    }
+    file.once('error', onError);
+    file.once('ready', () => {
+        file.off('error', onError);
+        resolve();
+    });
+});
+const redirectCodes = new Set([300, 301, 302, 303, 304, 307, 308]);
+const nonEnumerableProperties = [
+    'context',
+    'body',
+    'json',
+    'form'
+];
+exports.setNonEnumerableProperties = (sources, to) => {
+    // Non enumerable properties shall not be merged
+    const properties = {};
+    for (const source of sources) {
+        if (!source) {
+            continue;
+        }
+        for (const name of nonEnumerableProperties) {
+            if (!(name in source)) {
+                continue;
+            }
+            properties[name] = {
+                writable: true,
+                configurable: true,
+                enumerable: false,
+                // @ts-expect-error TS doesn't see the check above
+                value: source[name]
+            };
+        }
+    }
+    Object.defineProperties(to, properties);
 };
 /**
- * Returns the ISO 639-1 code of the desiredLang – if it is supported by Google Translate
- * @param {string} desiredLang – the name or the code of the desired language
- * @returns {string|boolean} The ISO 639-1 code of the language or false if the language is not supported
- */
-function getCode(desiredLang) {
-    if (!desiredLang) {
-        return false;
+An error to be thrown when a request fails.
+Contains a `code` property with error class code, like `ECONNREFUSED`.
+*/
+class RequestError extends Error {
+    constructor(message, error, self) {
+        var _a;
+        super(message);
+        Error.captureStackTrace(this, this.constructor);
+        this.name = 'RequestError';
+        this.code = error.code;
+        if (self instanceof Request) {
+            Object.defineProperty(this, 'request', {
+                enumerable: false,
+                value: self
+            });
+            Object.defineProperty(this, 'response', {
+                enumerable: false,
+                value: self[kResponse]
+            });
+            Object.defineProperty(this, 'options', {
+                // This fails because of TS 3.7.2 useDefineForClassFields
+                // Ref: https://github.com/microsoft/TypeScript/issues/34972
+                enumerable: false,
+                value: self.options
+            });
+        }
+        else {
+            Object.defineProperty(this, 'options', {
+                // This fails because of TS 3.7.2 useDefineForClassFields
+                // Ref: https://github.com/microsoft/TypeScript/issues/34972
+                enumerable: false,
+                value: self
+            });
+        }
+        this.timings = (_a = this.request) === null || _a === void 0 ? void 0 : _a.timings;
+        // Recover the original stacktrace
+        if (is_1.default.string(error.stack) && is_1.default.string(this.stack)) {
+            const indexOfMessage = this.stack.indexOf(this.message) + this.message.length;
+            const thisStackTrace = this.stack.slice(indexOfMessage).split('\n').reverse();
+            const errorStackTrace = error.stack.slice(error.stack.indexOf(error.message) + error.message.length).split('\n').reverse();
+            // Remove duplicated traces
+            while (errorStackTrace.length !== 0 && errorStackTrace[0] === thisStackTrace[0]) {
+                thisStackTrace.shift();
+            }
+            this.stack = `${this.stack.slice(0, indexOfMessage)}${thisStackTrace.reverse().join('\n')}${errorStackTrace.reverse().join('\n')}`;
+        }
     }
-    desiredLang = desiredLang.toLowerCase();
+}
+exports.RequestError = RequestError;
+/**
+An error to be thrown when the server redirects you more than ten times.
+Includes a `response` property.
+*/
+class MaxRedirectsError extends RequestError {
+    constructor(request) {
+        super(`Redirected ${request.options.maxRedirects} times. Aborting.`, {}, request);
+        this.name = 'MaxRedirectsError';
+    }
+}
+exports.MaxRedirectsError = MaxRedirectsError;
+/**
+An error to be thrown when the server response code is not 2xx nor 3xx if `options.followRedirect` is `true`, but always except for 304.
+Includes a `response` property.
+*/
+class HTTPError extends RequestError {
+    constructor(response) {
+        super(`Response code ${response.statusCode} (${response.statusMessage})`, {}, response.request);
+        this.name = 'HTTPError';
+    }
+}
+exports.HTTPError = HTTPError;
+/**
+An error to be thrown when a cache method fails.
+For example, if the database goes down or there's a filesystem error.
+*/
+class CacheError extends RequestError {
+    constructor(error, request) {
+        super(error.message, error, request);
+        this.name = 'CacheError';
+    }
+}
+exports.CacheError = CacheError;
+/**
+An error to be thrown when the request body is a stream and an error occurs while reading from that stream.
+*/
+class UploadError extends RequestError {
+    constructor(error, request) {
+        super(error.message, error, request);
+        this.name = 'UploadError';
+    }
+}
+exports.UploadError = UploadError;
+/**
+An error to be thrown when the request is aborted due to a timeout.
+Includes an `event` and `timings` property.
+*/
+class TimeoutError extends RequestError {
+    constructor(error, timings, request) {
+        super(error.message, error, request);
+        this.name = 'TimeoutError';
+        this.event = error.event;
+        this.timings = timings;
+    }
+}
+exports.TimeoutError = TimeoutError;
+/**
+An error to be thrown when reading from response stream fails.
+*/
+class ReadError extends RequestError {
+    constructor(error, request) {
+        super(error.message, error, request);
+        this.name = 'ReadError';
+    }
+}
+exports.ReadError = ReadError;
+/**
+An error to be thrown when given an unsupported protocol.
+*/
+class UnsupportedProtocolError extends RequestError {
+    constructor(options) {
+        super(`Unsupported protocol "${options.url.protocol}"`, {}, options);
+        this.name = 'UnsupportedProtocolError';
+    }
+}
+exports.UnsupportedProtocolError = UnsupportedProtocolError;
+const proxiedRequestEvents = [
+    'socket',
+    'connect',
+    'continue',
+    'information',
+    'upgrade',
+    'timeout'
+];
+class Request extends stream_1.Duplex {
+    constructor(url, options = {}, defaults) {
+        super({
+            // This must be false, to enable throwing after destroy
+            // It is used for retry logic in Promise API
+            autoDestroy: false,
+            // It needs to be zero because we're just proxying the data to another stream
+            highWaterMark: 0
+        });
+        this[kDownloadedSize] = 0;
+        this[kUploadedSize] = 0;
+        this.requestInitialized = false;
+        this[kServerResponsesPiped] = new Set();
+        this.redirects = [];
+        this[kStopReading] = false;
+        this[kTriggerRead] = false;
+        this[kJobs] = [];
+        this.retryCount = 0;
+        // TODO: Remove this when targeting Node.js >= 12
+        this._progressCallbacks = [];
+        const unlockWrite = () => this._unlockWrite();
+        const lockWrite = () => this._lockWrite();
+        this.on('pipe', (source) => {
+            source.prependListener('data', unlockWrite);
+            source.on('data', lockWrite);
+            source.prependListener('end', unlockWrite);
+            source.on('end', lockWrite);
+        });
+        this.on('unpipe', (source) => {
+            source.off('data', unlockWrite);
+            source.off('data', lockWrite);
+            source.off('end', unlockWrite);
+            source.off('end', lockWrite);
+        });
+        this.on('pipe', source => {
+            if (source instanceof http_1.IncomingMessage) {
+                this.options.headers = {
+                    ...source.headers,
+                    ...this.options.headers
+                };
+            }
+        });
+        const { json, body, form } = options;
+        if (json || body || form) {
+            this._lockWrite();
+        }
+        if (exports.kIsNormalizedAlready in options) {
+            this.options = options;
+        }
+        else {
+            try {
+                // @ts-expect-error Common TypeScript bug saying that `this.constructor` is not accessible
+                this.options = this.constructor.normalizeArguments(url, options, defaults);
+            }
+            catch (error) {
+                // TODO: Move this to `_destroy()`
+                if (is_1.default.nodeStream(options.body)) {
+                    options.body.destroy();
+                }
+                this.destroy(error);
+                return;
+            }
+        }
+        (async () => {
+            var _a;
+            try {
+                if (this.options.body instanceof fs_1.ReadStream) {
+                    await waitForOpenFile(this.options.body);
+                }
+                const { url: normalizedURL } = this.options;
+                if (!normalizedURL) {
+                    throw new TypeError('Missing `url` property');
+                }
+                this.requestUrl = normalizedURL.toString();
+                decodeURI(this.requestUrl);
+                await this._finalizeBody();
+                await this._makeRequest();
+                if (this.destroyed) {
+                    (_a = this[kRequest]) === null || _a === void 0 ? void 0 : _a.destroy();
+                    return;
+                }
+                // Queued writes etc.
+                for (const job of this[kJobs]) {
+                    job();
+                }
+                // Prevent memory leak
+                this[kJobs].length = 0;
+                this.requestInitialized = true;
+            }
+            catch (error) {
+                if (error instanceof RequestError) {
+                    this._beforeError(error);
+                    return;
+                }
+                // This is a workaround for https://github.com/nodejs/node/issues/33335
+                if (!this.destroyed) {
+                    this.destroy(error);
+                }
+            }
+        })();
+    }
+    static normalizeArguments(url, options, defaults) {
+        var _a, _b, _c, _d, _e;
+        const rawOptions = options;
+        if (is_1.default.object(url) && !is_1.default.urlInstance(url)) {
+            options = { ...defaults, ...url, ...options };
+        }
+        else {
+            if (url && options && options.url !== undefined) {
+                throw new TypeError('The `url` option is mutually exclusive with the `input` argument');
+            }
+            options = { ...defaults, ...options };
+            if (url !== undefined) {
+                options.url = url;
+            }
+            if (is_1.default.urlInstance(options.url)) {
+                options.url = new url_1.URL(options.url.toString());
+            }
+        }
+        // TODO: Deprecate URL options in Got 12.
+        // Support extend-specific options
+        if (options.cache === false) {
+            options.cache = undefined;
+        }
+        if (options.dnsCache === false) {
+            options.dnsCache = undefined;
+        }
+        // Nice type assertions
+        is_1.assert.any([is_1.default.string, is_1.default.undefined], options.method);
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.headers);
+        is_1.assert.any([is_1.default.string, is_1.default.urlInstance, is_1.default.undefined], options.prefixUrl);
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.cookieJar);
+        is_1.assert.any([is_1.default.object, is_1.default.string, is_1.default.undefined], options.searchParams);
+        is_1.assert.any([is_1.default.object, is_1.default.string, is_1.default.undefined], options.cache);
+        is_1.assert.any([is_1.default.object, is_1.default.number, is_1.default.undefined], options.timeout);
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.context);
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.hooks);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.decompress);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.ignoreInvalidCookies);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.followRedirect);
+        is_1.assert.any([is_1.default.number, is_1.default.undefined], options.maxRedirects);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.throwHttpErrors);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.http2);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.allowGetBody);
+        is_1.assert.any([is_1.default.string, is_1.default.undefined], options.localAddress);
+        is_1.assert.any([dns_ip_version_1.isDnsLookupIpVersion, is_1.default.undefined], options.dnsLookupIpVersion);
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.https);
+        is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.rejectUnauthorized);
+        if (options.https) {
+            is_1.assert.any([is_1.default.boolean, is_1.default.undefined], options.https.rejectUnauthorized);
+            is_1.assert.any([is_1.default.function_, is_1.default.undefined], options.https.checkServerIdentity);
+            is_1.assert.any([is_1.default.string, is_1.default.object, is_1.default.array, is_1.default.undefined], options.https.certificateAuthority);
+            is_1.assert.any([is_1.default.string, is_1.default.object, is_1.default.array, is_1.default.undefined], options.https.key);
+            is_1.assert.any([is_1.default.string, is_1.default.object, is_1.default.array, is_1.default.undefined], options.https.certificate);
+            is_1.assert.any([is_1.default.string, is_1.default.undefined], options.https.passphrase);
+            is_1.assert.any([is_1.default.string, is_1.default.buffer, is_1.default.array, is_1.default.undefined], options.https.pfx);
+        }
+        is_1.assert.any([is_1.default.object, is_1.default.undefined], options.cacheOptions);
+        // `options.method`
+        if (is_1.default.string(options.method)) {
+            options.method = options.method.toUpperCase();
+        }
+        else {
+            options.method = 'GET';
+        }
+        // `options.headers`
+        if (options.headers === (defaults === null || defaults === void 0 ? void 0 : defaults.headers)) {
+            options.headers = { ...options.headers };
+        }
+        else {
+            options.headers = lowercaseKeys({ ...(defaults === null || defaults === void 0 ? void 0 : defaults.headers), ...options.headers });
+        }
+        // Disallow legacy `url.Url`
+        if ('slashes' in options) {
+            throw new TypeError('The legacy `url.Url` has been deprecated. Use `URL` instead.');
+        }
+        // `options.auth`
+        if ('auth' in options) {
+            throw new TypeError('Parameter `auth` is deprecated. Use `username` / `password` instead.');
+        }
+        // `options.searchParams`
+        if ('searchParams' in options) {
+            if (options.searchParams && options.searchParams !== (defaults === null || defaults === void 0 ? void 0 : defaults.searchParams)) {
+                let searchParameters;
+                if (is_1.default.string(options.searchParams) || (options.searchParams instanceof url_1.URLSearchParams)) {
+                    searchParameters = new url_1.URLSearchParams(options.searchParams);
+                }
+                else {
+                    validateSearchParameters(options.searchParams);
+                    searchParameters = new url_1.URLSearchParams();
+                    // eslint-disable-next-line guard-for-in
+                    for (const key in options.searchParams) {
+                        const value = options.searchParams[key];
+                        if (value === null) {
+                            searchParameters.append(key, '');
+                        }
+                        else if (value !== undefined) {
+                            searchParameters.append(key, value);
+                        }
+                    }
+                }
+                // `normalizeArguments()` is also used to merge options
+                (_a = defaults === null || defaults === void 0 ? void 0 : defaults.searchParams) === null || _a === void 0 ? void 0 : _a.forEach((value, key) => {
+                    // Only use default if one isn't already defined
+                    if (!searchParameters.has(key)) {
+                        searchParameters.append(key, value);
+                    }
+                });
+                options.searchParams = searchParameters;
+            }
+        }
+        // `options.username` & `options.password`
+        options.username = (_b = options.username) !== null && _b !== void 0 ? _b : '';
+        options.password = (_c = options.password) !== null && _c !== void 0 ? _c : '';
+        // `options.prefixUrl` & `options.url`
+        if (is_1.default.undefined(options.prefixUrl)) {
+            options.prefixUrl = (_d = defaults === null || defaults === void 0 ? void 0 : defaults.prefixUrl) !== null && _d !== void 0 ? _d : '';
+        }
+        else {
+            options.prefixUrl = options.prefixUrl.toString();
+            if (options.prefixUrl !== '' && !options.prefixUrl.endsWith('/')) {
+                options.prefixUrl += '/';
+            }
+        }
+        if (is_1.default.string(options.url)) {
+            if (options.url.startsWith('/')) {
+                throw new Error('`input` must not start with a slash when using `prefixUrl`');
+            }
+            options.url = options_to_url_1.default(options.prefixUrl + options.url, options);
+        }
+        else if ((is_1.default.undefined(options.url) && options.prefixUrl !== '') || options.protocol) {
+            options.url = options_to_url_1.default(options.prefixUrl, options);
+        }
+        if (options.url) {
+            if ('port' in options) {
+                delete options.port;
+            }
+            // Make it possible to change `options.prefixUrl`
+            let { prefixUrl } = options;
+            Object.defineProperty(options, 'prefixUrl', {
+                set: (value) => {
+                    const url = options.url;
+                    if (!url.href.startsWith(value)) {
+                        throw new Error(`Cannot change \`prefixUrl\` from ${prefixUrl} to ${value}: ${url.href}`);
+                    }
+                    options.url = new url_1.URL(value + url.href.slice(prefixUrl.length));
+                    prefixUrl = value;
+                },
+                get: () => prefixUrl
+            });
+            // Support UNIX sockets
+            let { protocol } = options.url;
+            if (protocol === 'unix:') {
+                protocol = 'http:';
+                options.url = new url_1.URL(`http://unix${options.url.pathname}${options.url.search}`);
+            }
+            // Set search params
+            if (options.searchParams) {
+                // eslint-disable-next-line @typescript-eslint/no-base-to-string
+                options.url.search = options.searchParams.toString();
+            }
+            // Protocol check
+            if (protocol !== 'http:' && protocol !== 'https:') {
+                throw new UnsupportedProtocolError(options);
+            }
+            // Update `username`
+            if (options.username === '') {
+                options.username = options.url.username;
+            }
+            else {
+                options.url.username = options.username;
+            }
+            // Update `password`
+            if (options.password === '') {
+                options.password = options.url.password;
+            }
+            else {
+                options.url.password = options.password;
+            }
+        }
+        // `options.cookieJar`
+        const { cookieJar } = options;
+        if (cookieJar) {
+            let { setCookie, getCookieString } = cookieJar;
+            is_1.assert.function_(setCookie);
+            is_1.assert.function_(getCookieString);
+            /* istanbul ignore next: Horrible `tough-cookie` v3 check */
+            if (setCookie.length === 4 && getCookieString.length === 0) {
+                setCookie = util_1.promisify(setCookie.bind(options.cookieJar));
+                getCookieString = util_1.promisify(getCookieString.bind(options.cookieJar));
+                options.cookieJar = {
+                    setCookie,
+                    getCookieString: getCookieString
+                };
+            }
+        }
+        // `options.cache`
+        const { cache } = options;
+        if (cache) {
+            if (!cacheableStore.has(cache)) {
+                cacheableStore.set(cache, new CacheableRequest(((requestOptions, handler) => {
+                    const result = requestOptions[kRequest](requestOptions, handler);
+                    // TODO: remove this when `cacheable-request` supports async request functions.
+                    if (is_1.default.promise(result)) {
+                        // @ts-expect-error
+                        // We only need to implement the error handler in order to support HTTP2 caching.
+                        // The result will be a promise anyway.
+                        result.once = (event, handler) => {
+                            if (event === 'error') {
+                                result.catch(handler);
+                            }
+                            else if (event === 'abort') {
+                                // The empty catch is needed here in case when
+                                // it rejects before it's `await`ed in `_makeRequest`.
+                                (async () => {
+                                    try {
+                                        const request = (await result);
+                                        request.once('abort', handler);
+                                    }
+                                    catch (_a) { }
+                                })();
+                            }
+                            else {
+                                /* istanbul ignore next: safety check */
+                                throw new Error(`Unknown HTTP2 promise event: ${event}`);
+                            }
+                            return result;
+                        };
+                    }
+                    return result;
+                }), cache));
+            }
+        }
+        // `options.cacheOptions`
+        options.cacheOptions = { ...options.cacheOptions };
+        // `options.dnsCache`
+        if (options.dnsCache === true) {
+            options.dnsCache = globalDnsCache;
+        }
+        else if (!is_1.default.undefined(options.dnsCache) && !options.dnsCache.lookup) {
+            throw new TypeError(`Parameter \`dnsCache\` must be a CacheableLookup instance or a boolean, got ${is_1.default(options.dnsCache)}`);
+        }
+        // `options.timeout`
+        if (is_1.default.number(options.timeout)) {
+            options.timeout = { request: options.timeout };
+        }
+        else if (defaults && options.timeout !== defaults.timeout) {
+            options.timeout = {
+                ...defaults.timeout,
+                ...options.timeout
+            };
+        }
+        else {
+            options.timeout = { ...options.timeout };
+        }
+        // `options.context`
+        if (!options.context) {
+            options.context = {};
+        }
+        // `options.hooks`
+        const areHooksDefault = options.hooks === (defaults === null || defaults === void 0 ? void 0 : defaults.hooks);
+        options.hooks = { ...options.hooks };
+        for (const event of exports.knownHookEvents) {
+            if (event in options.hooks) {
+                if (is_1.default.array(options.hooks[event])) {
+                    // See https://github.com/microsoft/TypeScript/issues/31445#issuecomment-576929044
+                    options.hooks[event] = [...options.hooks[event]];
+                }
+                else {
+                    throw new TypeError(`Parameter \`${event}\` must be an Array, got ${is_1.default(options.hooks[event])}`);
+                }
+            }
+            else {
+                options.hooks[event] = [];
+            }
+        }
+        if (defaults && !areHooksDefault) {
+            for (const event of exports.knownHookEvents) {
+                const defaultHooks = defaults.hooks[event];
+                if (defaultHooks.length > 0) {
+                    // See https://github.com/microsoft/TypeScript/issues/31445#issuecomment-576929044
+                    options.hooks[event] = [
+                        ...defaults.hooks[event],
+                        ...options.hooks[event]
+                    ];
+                }
+            }
+        }
+        // DNS options
+        if ('family' in options) {
+            deprecation_warning_1.default('"options.family" was never documented, please use "options.dnsLookupIpVersion"');
+        }
+        // HTTPS options
+        if (defaults === null || defaults === void 0 ? void 0 : defaults.https) {
+            options.https = { ...defaults.https, ...options.https };
+        }
+        if ('rejectUnauthorized' in options) {
+            deprecation_warning_1.default('"options.rejectUnauthorized" is now deprecated, please use "options.https.rejectUnauthorized"');
+        }
+        if ('checkServerIdentity' in options) {
+            deprecation_warning_1.default('"options.checkServerIdentity" was never documented, please use "options.https.checkServerIdentity"');
+        }
+        if ('ca' in options) {
+            deprecation_warning_1.default('"options.ca" was never documented, please use "options.https.certificateAuthority"');
+        }
+        if ('key' in options) {
+            deprecation_warning_1.default('"options.key" was never documented, please use "options.https.key"');
+        }
+        if ('cert' in options) {
+            deprecation_warning_1.default('"options.cert" was never documented, please use "options.https.certificate"');
+        }
+        if ('passphrase' in options) {
+            deprecation_warning_1.default('"options.passphrase" was never documented, please use "options.https.passphrase"');
+        }
+        if ('pfx' in options) {
+            deprecation_warning_1.default('"options.pfx" was never documented, please use "options.https.pfx"');
+        }
+        // Other options
+        if ('followRedirects' in options) {
+            throw new TypeError('The `followRedirects` option does not exist. Use `followRedirect` instead.');
+        }
+        if (options.agent) {
+            for (const key in options.agent) {
+                if (key !== 'http' && key !== 'https' && key !== 'http2') {
+                    throw new TypeError(`Expected the \`options.agent\` properties to be \`http\`, \`https\` or \`http2\`, got \`${key}\``);
+                }
+            }
+        }
+        options.maxRedirects = (_e = options.maxRedirects) !== null && _e !== void 0 ? _e : 0;
+        // Set non-enumerable properties
+        exports.setNonEnumerableProperties([defaults, rawOptions], options);
+        return normalize_arguments_1.default(options, defaults);
+    }
+    _lockWrite() {
+        const onLockedWrite = () => {
+            throw new TypeError('The payload has been already provided');
+        };
+        this.write = onLockedWrite;
+        this.end = onLockedWrite;
+    }
+    _unlockWrite() {
+        this.write = super.write;
+        this.end = super.end;
+    }
+    async _finalizeBody() {
+        const { options } = this;
+        const { headers } = options;
+        const isForm = !is_1.default.undefined(options.form);
+        const isJSON = !is_1.default.undefined(options.json);
+        const isBody = !is_1.default.undefined(options.body);
+        const hasPayload = isForm || isJSON || isBody;
+        const cannotHaveBody = exports.withoutBody.has(options.method) && !(options.method === 'GET' && options.allowGetBody);
+        this._cannotHaveBody = cannotHaveBody;
+        if (hasPayload) {
+            if (cannotHaveBody) {
+                throw new TypeError(`The \`${options.method}\` method cannot be used with a body`);
+            }
+            if ([isBody, isForm, isJSON].filter(isTrue => isTrue).length > 1) {
+                throw new TypeError('The `body`, `json` and `form` options are mutually exclusive');
+            }
+            if (isBody &&
+                !(options.body instanceof stream_1.Readable) &&
+                !is_1.default.string(options.body) &&
+                !is_1.default.buffer(options.body) &&
+                !is_form_data_1.default(options.body)) {
+                throw new TypeError('The `body` option must be a stream.Readable, string or Buffer');
+            }
+            if (isForm && !is_1.default.object(options.form)) {
+                throw new TypeError('The `form` option must be an Object');
+            }
+            {
+                // Serialize body
+                const noContentType = !is_1.default.string(headers['content-type']);
+                if (isBody) {
+                    // Special case for https://github.com/form-data/form-data
+                    if (is_form_data_1.default(options.body) && noContentType) {
+                        headers['content-type'] = `multipart/form-data; boundary=${options.body.getBoundary()}`;
+                    }
+                    this[kBody] = options.body;
+                }
+                else if (isForm) {
+                    if (noContentType) {
+                        headers['content-type'] = 'application/x-www-form-urlencoded';
+                    }
+                    this[kBody] = (new url_1.URLSearchParams(options.form)).toString();
+                }
+                else {
+                    if (noContentType) {
+                        headers['content-type'] = 'application/json';
+                    }
+                    this[kBody] = options.stringifyJson(options.json);
+                }
+                const uploadBodySize = await get_body_size_1.default(this[kBody], options.headers);
+                // See https://tools.ietf.org/html/rfc7230#section-3.3.2
+                // A user agent SHOULD send a Content-Length in a request message when
+                // no Transfer-Encoding is sent and the request method defines a meaning
+                // for an enclosed payload body.  For example, a Content-Length header
+                // field is normally sent in a POST request even when the value is 0
+                // (indicating an empty payload body).  A user agent SHOULD NOT send a
+                // Content-Length header field when the request message does not contain
+                // a payload body and the method semantics do not anticipate such a
+                // body.
+                if (is_1.default.undefined(headers['content-length']) && is_1.default.undefined(headers['transfer-encoding'])) {
+                    if (!cannotHaveBody && !is_1.default.undefined(uploadBodySize)) {
+                        headers['content-length'] = String(uploadBodySize);
+                    }
+                }
+            }
+        }
+        else if (cannotHaveBody) {
+            this._lockWrite();
+        }
+        else {
+            this._unlockWrite();
+        }
+        this[kBodySize] = Number(headers['content-length']) || undefined;
+    }
+    async _onResponseBase(response) {
+        const { options } = this;
+        const { url } = options;
+        this[kOriginalResponse] = response;
+        if (options.decompress) {
+            response = decompressResponse(response);
+        }
+        const statusCode = response.statusCode;
+        const typedResponse = response;
+        typedResponse.statusMessage = typedResponse.statusMessage ? typedResponse.statusMessage : http.STATUS_CODES[statusCode];
+        typedResponse.url = options.url.toString();
+        typedResponse.requestUrl = this.requestUrl;
+        typedResponse.redirectUrls = this.redirects;
+        typedResponse.request = this;
+        typedResponse.isFromCache = response.fromCache || false;
+        typedResponse.ip = this.ip;
+        typedResponse.retryCount = this.retryCount;
+        this[kIsFromCache] = typedResponse.isFromCache;
+        this[kResponseSize] = Number(response.headers['content-length']) || undefined;
+        this[kResponse] = response;
+        response.once('end', () => {
+            this[kResponseSize] = this[kDownloadedSize];
+            this.emit('downloadProgress', this.downloadProgress);
+        });
+        response.once('error', (error) => {
+            // Force clean-up, because some packages don't do this.
+            // TODO: Fix decompress-response
+            response.destroy();
+            this._beforeError(new ReadError(error, this));
+        });
+        response.once('aborted', () => {
+            this._beforeError(new ReadError({
+                name: 'Error',
+                message: 'The server aborted pending request',
+                code: 'ECONNRESET'
+            }, this));
+        });
+        this.emit('downloadProgress', this.downloadProgress);
+        const rawCookies = response.headers['set-cookie'];
+        if (is_1.default.object(options.cookieJar) && rawCookies) {
+            let promises = rawCookies.map(async (rawCookie) => options.cookieJar.setCookie(rawCookie, url.toString()));
+            if (options.ignoreInvalidCookies) {
+                promises = promises.map(async (p) => p.catch(() => { }));
+            }
+            try {
+                await Promise.all(promises);
+            }
+            catch (error) {
+                this._beforeError(error);
+                return;
+            }
+        }
+        if (options.followRedirect && response.headers.location && redirectCodes.has(statusCode)) {
+            // We're being redirected, we don't care about the response.
+            // It'd be best to abort the request, but we can't because
+            // we would have to sacrifice the TCP connection. We don't want that.
+            response.resume();
+            if (this[kRequest]) {
+                this[kCancelTimeouts]();
+                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+                delete this[kRequest];
+                this[kUnproxyEvents]();
+            }
+            const shouldBeGet = statusCode === 303 && options.method !== 'GET' && options.method !== 'HEAD';
+            if (shouldBeGet || !options.methodRewriting) {
+                // Server responded with "see other", indicating that the resource exists at another location,
+                // and the client should request it from that location via GET or HEAD.
+                options.method = 'GET';
+                if ('body' in options) {
+                    delete options.body;
+                }
+                if ('json' in options) {
+                    delete options.json;
+                }
+                if ('form' in options) {
+                    delete options.form;
+                }
+                this[kBody] = undefined;
+                delete options.headers['content-length'];
+            }
+            if (this.redirects.length >= options.maxRedirects) {
+                this._beforeError(new MaxRedirectsError(this));
+                return;
+            }
+            try {
+                // Do not remove. See https://github.com/sindresorhus/got/pull/214
+                const redirectBuffer = Buffer.from(response.headers.location, 'binary').toString();
+                // Handles invalid URLs. See https://github.com/sindresorhus/got/issues/604
+                const redirectUrl = new url_1.URL(redirectBuffer, url);
+                const redirectString = redirectUrl.toString();
+                decodeURI(redirectString);
+                // Redirecting to a different site, clear sensitive data.
+                if (redirectUrl.hostname !== url.hostname || redirectUrl.port !== url.port) {
+                    if ('host' in options.headers) {
+                        delete options.headers.host;
+                    }
+                    if ('cookie' in options.headers) {
+                        delete options.headers.cookie;
+                    }
+                    if ('authorization' in options.headers) {
+                        delete options.headers.authorization;
+                    }
+                    if (options.username || options.password) {
+                        options.username = '';
+                        options.password = '';
+                    }
+                }
+                else {
+                    redirectUrl.username = options.username;
+                    redirectUrl.password = options.password;
+                }
+                this.redirects.push(redirectString);
+                options.url = redirectUrl;
+                for (const hook of options.hooks.beforeRedirect) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await hook(options, typedResponse);
+                }
+                this.emit('redirect', typedResponse, options);
+                await this._makeRequest();
+            }
+            catch (error) {
+                this._beforeError(error);
+                return;
+            }
+            return;
+        }
+        if (options.isStream && options.throwHttpErrors && !is_response_ok_1.isResponseOk(typedResponse)) {
+            this._beforeError(new HTTPError(typedResponse));
+            return;
+        }
+        response.on('readable', () => {
+            if (this[kTriggerRead]) {
+                this._read();
+            }
+        });
+        this.on('resume', () => {
+            response.resume();
+        });
+        this.on('pause', () => {
+            response.pause();
+        });
+        response.once('end', () => {
+            this.push(null);
+        });
+        this.emit('response', response);
+        for (const destination of this[kServerResponsesPiped]) {
+            if (destination.headersSent) {
+                continue;
+            }
+            // eslint-disable-next-line guard-for-in
+            for (const key in response.headers) {
+                const isAllowed = options.decompress ? key !== 'content-encoding' : true;
+                const value = response.headers[key];
+                if (isAllowed) {
+                    destination.setHeader(key, value);
+                }
+            }
+            destination.statusCode = statusCode;
+        }
+    }
+    async _onResponse(response) {
+        try {
+            await this._onResponseBase(response);
+        }
+        catch (error) {
+            /* istanbul ignore next: better safe than sorry */
+            this._beforeError(error);
+        }
+    }
+    _onRequest(request) {
+        const { options } = this;
+        const { timeout, url } = options;
+        http_timer_1.default(request);
+        this[kCancelTimeouts] = timed_out_1.default(request, timeout, url);
+        const responseEventName = options.cache ? 'cacheableResponse' : 'response';
+        request.once(responseEventName, (response) => {
+            void this._onResponse(response);
+        });
+        request.once('error', (error) => {
+            var _a;
+            // Force clean-up, because some packages (e.g. nock) don't do this.
+            request.destroy();
+            // Node.js <= 12.18.2 mistakenly emits the response `end` first.
+            (_a = request.res) === null || _a === void 0 ? void 0 : _a.removeAllListeners('end');
+            error = error instanceof timed_out_1.TimeoutError ? new TimeoutError(error, this.timings, this) : new RequestError(error.message, error, this);
+            this._beforeError(error);
+        });
+        this[kUnproxyEvents] = proxy_events_1.default(request, this, proxiedRequestEvents);
+        this[kRequest] = request;
+        this.emit('uploadProgress', this.uploadProgress);
+        // Send body
+        const body = this[kBody];
+        const currentRequest = this.redirects.length === 0 ? this : request;
+        if (is_1.default.nodeStream(body)) {
+            body.pipe(currentRequest);
+            body.once('error', (error) => {
+                this._beforeError(new UploadError(error, this));
+            });
+        }
+        else {
+            this._unlockWrite();
+            if (!is_1.default.undefined(body)) {
+                this._writeRequest(body, undefined, () => { });
+                currentRequest.end();
+                this._lockWrite();
+            }
+            else if (this._cannotHaveBody || this._noPipe) {
+                currentRequest.end();
+                this._lockWrite();
+            }
+        }
+        this.emit('request', request);
+    }
+    async _createCacheableRequest(url, options) {
+        return new Promise((resolve, reject) => {
+            // TODO: Remove `utils/url-to-options.ts` when `cacheable-request` is fixed
+            Object.assign(options, url_to_options_1.default(url));
+            // `http-cache-semantics` checks this
+            // TODO: Fix this ignore.
+            // @ts-expect-error
+            delete options.url;
+            let request;
+            // This is ugly
+            const cacheRequest = cacheableStore.get(options.cache)(options, async (response) => {
+                // TODO: Fix `cacheable-response`
+                response._readableState.autoDestroy = false;
+                if (request) {
+                    (await request).emit('cacheableResponse', response);
+                }
+                resolve(response);
+            });
+            // Restore options
+            options.url = url;
+            cacheRequest.once('error', reject);
+            cacheRequest.once('request', async (requestOrPromise) => {
+                request = requestOrPromise;
+                resolve(request);
+            });
+        });
+    }
+    async _makeRequest() {
+        var _a, _b, _c, _d, _e;
+        const { options } = this;
+        const { headers } = options;
+        for (const key in headers) {
+            if (is_1.default.undefined(headers[key])) {
+                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+                delete headers[key];
+            }
+            else if (is_1.default.null_(headers[key])) {
+                throw new TypeError(`Use \`undefined\` instead of \`null\` to delete the \`${key}\` header`);
+            }
+        }
+        if (options.decompress && is_1.default.undefined(headers['accept-encoding'])) {
+            headers['accept-encoding'] = supportsBrotli ? 'gzip, deflate, br' : 'gzip, deflate';
+        }
+        // Set cookies
+        if (options.cookieJar) {
+            const cookieString = await options.cookieJar.getCookieString(options.url.toString());
+            if (is_1.default.nonEmptyString(cookieString)) {
+                options.headers.cookie = cookieString;
+            }
+        }
+        for (const hook of options.hooks.beforeRequest) {
+            // eslint-disable-next-line no-await-in-loop
+            const result = await hook(options);
+            if (!is_1.default.undefined(result)) {
+                // @ts-expect-error Skip the type mismatch to support abstract responses
+                options.request = () => result;
+                break;
+            }
+        }
+        if (options.body && this[kBody] !== options.body) {
+            this[kBody] = options.body;
+        }
+        const { agent, request, timeout, url } = options;
+        if (options.dnsCache && !('lookup' in options)) {
+            options.lookup = options.dnsCache.lookup;
+        }
+        // UNIX sockets
+        if (url.hostname === 'unix') {
+            const matches = /(?<socketPath>.+?):(?<path>.+)/.exec(`${url.pathname}${url.search}`);
+            if (matches === null || matches === void 0 ? void 0 : matches.groups) {
+                const { socketPath, path } = matches.groups;
+                Object.assign(options, {
+                    socketPath,
+                    path,
+                    host: ''
+                });
+            }
+        }
+        const isHttps = url.protocol === 'https:';
+        // Fallback function
+        let fallbackFn;
+        if (options.http2) {
+            fallbackFn = http2wrapper.auto;
+        }
+        else {
+            fallbackFn = isHttps ? https.request : http.request;
+        }
+        const realFn = (_a = options.request) !== null && _a !== void 0 ? _a : fallbackFn;
+        // Cache support
+        const fn = options.cache ? this._createCacheableRequest : realFn;
+        // Pass an agent directly when HTTP2 is disabled
+        if (agent && !options.http2) {
+            options.agent = agent[isHttps ? 'https' : 'http'];
+        }
+        // Prepare plain HTTP request options
+        options[kRequest] = realFn;
+        delete options.request;
+        // TODO: Fix this ignore.
+        // @ts-expect-error
+        delete options.timeout;
+        const requestOptions = options;
+        requestOptions.shared = (_b = options.cacheOptions) === null || _b === void 0 ? void 0 : _b.shared;
+        requestOptions.cacheHeuristic = (_c = options.cacheOptions) === null || _c === void 0 ? void 0 : _c.cacheHeuristic;
+        requestOptions.immutableMinTimeToLive = (_d = options.cacheOptions) === null || _d === void 0 ? void 0 : _d.immutableMinTimeToLive;
+        requestOptions.ignoreCargoCult = (_e = options.cacheOptions) === null || _e === void 0 ? void 0 : _e.ignoreCargoCult;
+        // If `dnsLookupIpVersion` is not present do not override `family`
+        if (options.dnsLookupIpVersion !== undefined) {
+            try {
+                requestOptions.family = dns_ip_version_1.dnsLookupIpVersionToFamily(options.dnsLookupIpVersion);
+            }
+            catch (_f) {
+                throw new Error('Invalid `dnsLookupIpVersion` option value');
+            }
+        }
+        // HTTPS options remapping
+        if (options.https) {
+            if ('rejectUnauthorized' in options.https) {
+                requestOptions.rejectUnauthorized = options.https.rejectUnauthorized;
+            }
+            if (options.https.checkServerIdentity) {
+                requestOptions.checkServerIdentity = options.https.checkServerIdentity;
+            }
+            if (options.https.certificateAuthority) {
+                requestOptions.ca = options.https.certificateAuthority;
+            }
+            if (options.https.certificate) {
+                requestOptions.cert = options.https.certificate;
+            }
+            if (options.https.key) {
+                requestOptions.key = options.https.key;
+            }
+            if (options.https.passphrase) {
+                requestOptions.passphrase = options.https.passphrase;
+            }
+            if (options.https.pfx) {
+                requestOptions.pfx = options.https.pfx;
+            }
+        }
+        try {
+            let requestOrResponse = await fn(url, requestOptions);
+            if (is_1.default.undefined(requestOrResponse)) {
+                requestOrResponse = fallbackFn(url, requestOptions);
+            }
+            // Restore options
+            options.request = request;
+            options.timeout = timeout;
+            options.agent = agent;
+            // HTTPS options restore
+            if (options.https) {
+                if ('rejectUnauthorized' in options.https) {
+                    delete requestOptions.rejectUnauthorized;
+                }
+                if (options.https.checkServerIdentity) {
+                    // @ts-expect-error - This one will be removed when we remove the alias.
+                    delete requestOptions.checkServerIdentity;
+                }
+                if (options.https.certificateAuthority) {
+                    delete requestOptions.ca;
+                }
+                if (options.https.certificate) {
+                    delete requestOptions.cert;
+                }
+                if (options.https.key) {
+                    delete requestOptions.key;
+                }
+                if (options.https.passphrase) {
+                    delete requestOptions.passphrase;
+                }
+                if (options.https.pfx) {
+                    delete requestOptions.pfx;
+                }
+            }
+            if (isClientRequest(requestOrResponse)) {
+                this._onRequest(requestOrResponse);
+                // Emit the response after the stream has been ended
+            }
+            else if (this.writable) {
+                this.once('finish', () => {
+                    void this._onResponse(requestOrResponse);
+                });
+                this._unlockWrite();
+                this.end();
+                this._lockWrite();
+            }
+            else {
+                void this._onResponse(requestOrResponse);
+            }
+        }
+        catch (error) {
+            if (error instanceof CacheableRequest.CacheError) {
+                throw new CacheError(error, this);
+            }
+            throw new RequestError(error.message, error, this);
+        }
+    }
+    async _error(error) {
+        try {
+            for (const hook of this.options.hooks.beforeError) {
+                // eslint-disable-next-line no-await-in-loop
+                error = await hook(error);
+            }
+        }
+        catch (error_) {
+            error = new RequestError(error_.message, error_, this);
+        }
+        this.destroy(error);
+    }
+    _beforeError(error) {
+        if (this[kStopReading]) {
+            return;
+        }
+        const { options } = this;
+        const retryCount = this.retryCount + 1;
+        this[kStopReading] = true;
+        if (!(error instanceof RequestError)) {
+            error = new RequestError(error.message, error, this);
+        }
+        const typedError = error;
+        const { response } = typedError;
+        void (async () => {
+            if (response && !response.body) {
+                response.setEncoding(this._readableState.encoding);
+                try {
+                    response.rawBody = await get_buffer_1.default(response);
+                    response.body = response.rawBody.toString();
+                }
+                catch (_a) { }
+            }
+            if (this.listenerCount('retry') !== 0) {
+                let backoff;
+                try {
+                    let retryAfter;
+                    if (response && 'retry-after' in response.headers) {
+                        retryAfter = Number(response.headers['retry-after']);
+                        if (Number.isNaN(retryAfter)) {
+                            retryAfter = Date.parse(response.headers['retry-after']) - Date.now();
+                            if (retryAfter <= 0) {
+                                retryAfter = 1;
+                            }
+                        }
+                        else {
+                            retryAfter *= 1000;
+                        }
+                    }
+                    backoff = await options.retry.calculateDelay({
+                        attemptCount: retryCount,
+                        retryOptions: options.retry,
+                        error: typedError,
+                        retryAfter,
+                        computedValue: calculate_retry_delay_1.default({
+                            attemptCount: retryCount,
+                            retryOptions: options.retry,
+                            error: typedError,
+                            retryAfter,
+                            computedValue: 0
+                        })
+                    });
+                }
+                catch (error_) {
+                    void this._error(new RequestError(error_.message, error_, this));
+                    return;
+                }
+                if (backoff) {
+                    const retry = async () => {
+                        try {
+                            for (const hook of this.options.hooks.beforeRetry) {
+                                // eslint-disable-next-line no-await-in-loop
+                                await hook(this.options, typedError, retryCount);
+                            }
+                        }
+                        catch (error_) {
+                            void this._error(new RequestError(error_.message, error, this));
+                            return;
+                        }
+                        // Something forced us to abort the retry
+                        if (this.destroyed) {
+                            return;
+                        }
+                        this.destroy();
+                        this.emit('retry', retryCount, error);
+                    };
+                    this[kRetryTimeout] = setTimeout(retry, backoff);
+                    return;
+                }
+            }
+            void this._error(typedError);
+        })();
+    }
+    _read() {
+        this[kTriggerRead] = true;
+        const response = this[kResponse];
+        if (response && !this[kStopReading]) {
+            // We cannot put this in the `if` above
+            // because `.read()` also triggers the `end` event
+            if (response.readableLength) {
+                this[kTriggerRead] = false;
+            }
+            let data;
+            while ((data = response.read()) !== null) {
+                this[kDownloadedSize] += data.length;
+                this[kStartedReading] = true;
+                const progress = this.downloadProgress;
+                if (progress.percent < 1) {
+                    this.emit('downloadProgress', progress);
+                }
+                this.push(data);
+            }
+        }
+    }
+    // Node.js 12 has incorrect types, so the encoding must be a string
+    _write(chunk, encoding, callback) {
+        const write = () => {
+            this._writeRequest(chunk, encoding, callback);
+        };
+        if (this.requestInitialized) {
+            write();
+        }
+        else {
+            this[kJobs].push(write);
+        }
+    }
+    _writeRequest(chunk, encoding, callback) {
+        if (this[kRequest].destroyed) {
+            // Probably the `ClientRequest` instance will throw
+            return;
+        }
+        this._progressCallbacks.push(() => {
+            this[kUploadedSize] += Buffer.byteLength(chunk, encoding);
+            const progress = this.uploadProgress;
+            if (progress.percent < 1) {
+                this.emit('uploadProgress', progress);
+            }
+        });
+        // TODO: What happens if it's from cache? Then this[kRequest] won't be defined.
+        this[kRequest].write(chunk, encoding, (error) => {
+            if (!error && this._progressCallbacks.length > 0) {
+                this._progressCallbacks.shift()();
+            }
+            callback(error);
+        });
+    }
+    _final(callback) {
+        const endRequest = () => {
+            // FIX: Node.js 10 calls the write callback AFTER the end callback!
+            while (this._progressCallbacks.length !== 0) {
+                this._progressCallbacks.shift()();
+            }
+            // We need to check if `this[kRequest]` is present,
+            // because it isn't when we use cache.
+            if (!(kRequest in this)) {
+                callback();
+                return;
+            }
+            if (this[kRequest].destroyed) {
+                callback();
+                return;
+            }
+            this[kRequest].end((error) => {
+                if (!error) {
+                    this[kBodySize] = this[kUploadedSize];
+                    this.emit('uploadProgress', this.uploadProgress);
+                    this[kRequest].emit('upload-complete');
+                }
+                callback(error);
+            });
+        };
+        if (this.requestInitialized) {
+            endRequest();
+        }
+        else {
+            this[kJobs].push(endRequest);
+        }
+    }
+    _destroy(error, callback) {
+        var _a;
+        this[kStopReading] = true;
+        // Prevent further retries
+        clearTimeout(this[kRetryTimeout]);
+        if (kRequest in this) {
+            this[kCancelTimeouts]();
+            // TODO: Remove the next `if` when these get fixed:
+            // - https://github.com/nodejs/node/issues/32851
+            if (!((_a = this[kResponse]) === null || _a === void 0 ? void 0 : _a.complete)) {
+                this[kRequest].destroy();
+            }
+        }
+        if (error !== null && !is_1.default.undefined(error) && !(error instanceof RequestError)) {
+            error = new RequestError(error.message, error, this);
+        }
+        callback(error);
+    }
+    get _isAboutToError() {
+        return this[kStopReading];
+    }
+    /**
+    The remote IP address.
+    */
+    get ip() {
+        var _a;
+        return (_a = this.socket) === null || _a === void 0 ? void 0 : _a.remoteAddress;
+    }
+    /**
+    Indicates whether the request has been aborted or not.
+    */
+    get aborted() {
+        var _a, _b, _c;
+        return ((_b = (_a = this[kRequest]) === null || _a === void 0 ? void 0 : _a.destroyed) !== null && _b !== void 0 ? _b : this.destroyed) && !((_c = this[kOriginalResponse]) === null || _c === void 0 ? void 0 : _c.complete);
+    }
+    get socket() {
+        var _a, _b;
+        return (_b = (_a = this[kRequest]) === null || _a === void 0 ? void 0 : _a.socket) !== null && _b !== void 0 ? _b : undefined;
+    }
+    /**
+    Progress event for downloading (receiving a response).
+    */
+    get downloadProgress() {
+        let percent;
+        if (this[kResponseSize]) {
+            percent = this[kDownloadedSize] / this[kResponseSize];
+        }
+        else if (this[kResponseSize] === this[kDownloadedSize]) {
+            percent = 1;
+        }
+        else {
+            percent = 0;
+        }
+        return {
+            percent,
+            transferred: this[kDownloadedSize],
+            total: this[kResponseSize]
+        };
+    }
+    /**
+    Progress event for uploading (sending a request).
+    */
+    get uploadProgress() {
+        let percent;
+        if (this[kBodySize]) {
+            percent = this[kUploadedSize] / this[kBodySize];
+        }
+        else if (this[kBodySize] === this[kUploadedSize]) {
+            percent = 1;
+        }
+        else {
+            percent = 0;
+        }
+        return {
+            percent,
+            transferred: this[kUploadedSize],
+            total: this[kBodySize]
+        };
+    }
+    /**
+    The object contains the following properties:
 
-    if (langs[desiredLang]) {
-        return desiredLang;
+    - `start` - Time when the request started.
+    - `socket` - Time when a socket was assigned to the request.
+    - `lookup` - Time when the DNS lookup finished.
+    - `connect` - Time when the socket successfully connected.
+    - `secureConnect` - Time when the socket securely connected.
+    - `upload` - Time when the request finished uploading.
+    - `response` - Time when the request fired `response` event.
+    - `end` - Time when the response fired `end` event.
+    - `error` - Time when the request fired `error` event.
+    - `abort` - Time when the request fired `abort` event.
+    - `phases`
+        - `wait` - `timings.socket - timings.start`
+        - `dns` - `timings.lookup - timings.socket`
+        - `tcp` - `timings.connect - timings.lookup`
+        - `tls` - `timings.secureConnect - timings.connect`
+        - `request` - `timings.upload - (timings.secureConnect || timings.connect)`
+        - `firstByte` - `timings.response - timings.upload`
+        - `download` - `timings.end - timings.response`
+        - `total` - `(timings.end || timings.error || timings.abort) - timings.start`
+
+    If something has not been measured yet, it will be `undefined`.
+
+    __Note__: The time is a `number` representing the milliseconds elapsed since the UNIX epoch.
+    */
+    get timings() {
+        var _a;
+        return (_a = this[kRequest]) === null || _a === void 0 ? void 0 : _a.timings;
+    }
+    /**
+    Whether the response was retrieved from the cache.
+    */
+    get isFromCache() {
+        return this[kIsFromCache];
+    }
+    pipe(destination, options) {
+        if (this[kStartedReading]) {
+            throw new Error('Failed to pipe. The response has been emitted already.');
+        }
+        if (destination instanceof http_1.ServerResponse) {
+            this[kServerResponsesPiped].add(destination);
+        }
+        return super.pipe(destination, options);
+    }
+    unpipe(destination) {
+        if (destination instanceof http_1.ServerResponse) {
+            this[kServerResponsesPiped].delete(destination);
+        }
+        super.unpipe(destination);
+        return this;
+    }
+}
+exports.default = Request;
+
+
+/***/ }),
+
+/***/ 4993:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.dnsLookupIpVersionToFamily = exports.isDnsLookupIpVersion = void 0;
+const conversionTable = {
+    auto: 0,
+    ipv4: 4,
+    ipv6: 6
+};
+exports.isDnsLookupIpVersion = (value) => {
+    return value in conversionTable;
+};
+exports.dnsLookupIpVersionToFamily = (dnsLookupIpVersion) => {
+    if (exports.isDnsLookupIpVersion(dnsLookupIpVersion)) {
+        return conversionTable[dnsLookupIpVersion];
+    }
+    throw new Error('Invalid DNS lookup IP version');
+};
+
+
+/***/ }),
+
+/***/ 4564:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const fs_1 = __nccwpck_require__(5747);
+const util_1 = __nccwpck_require__(1669);
+const is_1 = __nccwpck_require__(7678);
+const is_form_data_1 = __nccwpck_require__(40);
+const statAsync = util_1.promisify(fs_1.stat);
+exports.default = async (body, headers) => {
+    if (headers && 'content-length' in headers) {
+        return Number(headers['content-length']);
+    }
+    if (!body) {
+        return 0;
+    }
+    if (is_1.default.string(body)) {
+        return Buffer.byteLength(body);
+    }
+    if (is_1.default.buffer(body)) {
+        return body.length;
+    }
+    if (is_form_data_1.default(body)) {
+        return util_1.promisify(body.getLength.bind(body))();
+    }
+    if (body instanceof fs_1.ReadStream) {
+        const { size } = await statAsync(body.path);
+        if (size === 0) {
+            return undefined;
+        }
+        return size;
+    }
+    return undefined;
+};
+
+
+/***/ }),
+
+/***/ 4500:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+// TODO: Update https://github.com/sindresorhus/get-stream
+const getBuffer = async (stream) => {
+    const chunks = [];
+    let length = 0;
+    for await (const chunk of stream) {
+        chunks.push(chunk);
+        length += Buffer.byteLength(chunk);
+    }
+    if (Buffer.isBuffer(chunks[0])) {
+        return Buffer.concat(chunks, length);
+    }
+    return Buffer.from(chunks.join(''));
+};
+exports.default = getBuffer;
+
+
+/***/ }),
+
+/***/ 40:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const is_1 = __nccwpck_require__(7678);
+exports.default = (body) => is_1.default.nodeStream(body) && is_1.default.function_(body.getBoundary);
+
+
+/***/ }),
+
+/***/ 9298:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isResponseOk = void 0;
+exports.isResponseOk = (response) => {
+    const { statusCode } = response;
+    const limitStatusCode = response.request.options.followRedirect ? 299 : 399;
+    return (statusCode >= 200 && statusCode <= limitStatusCode) || statusCode === 304;
+};
+
+
+/***/ }),
+
+/***/ 9219:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+/* istanbul ignore file: deprecated */
+const url_1 = __nccwpck_require__(8835);
+const keys = [
+    'protocol',
+    'host',
+    'hostname',
+    'port',
+    'pathname',
+    'search'
+];
+exports.default = (origin, options) => {
+    var _a, _b;
+    if (options.path) {
+        if (options.pathname) {
+            throw new TypeError('Parameters `path` and `pathname` are mutually exclusive.');
+        }
+        if (options.search) {
+            throw new TypeError('Parameters `path` and `search` are mutually exclusive.');
+        }
+        if (options.searchParams) {
+            throw new TypeError('Parameters `path` and `searchParams` are mutually exclusive.');
+        }
+    }
+    if (options.search && options.searchParams) {
+        throw new TypeError('Parameters `search` and `searchParams` are mutually exclusive.');
+    }
+    if (!origin) {
+        if (!options.protocol) {
+            throw new TypeError('No URL protocol specified');
+        }
+        origin = `${options.protocol}//${(_b = (_a = options.hostname) !== null && _a !== void 0 ? _a : options.host) !== null && _b !== void 0 ? _b : ''}`;
+    }
+    const url = new url_1.URL(origin);
+    if (options.path) {
+        const searchIndex = options.path.indexOf('?');
+        if (searchIndex === -1) {
+            options.pathname = options.path;
+        }
+        else {
+            options.pathname = options.path.slice(0, searchIndex);
+            options.search = options.path.slice(searchIndex + 1);
+        }
+        delete options.path;
+    }
+    for (const key of keys) {
+        if (options[key]) {
+            url[key] = options[key].toString();
+        }
+    }
+    return url;
+};
+
+
+/***/ }),
+
+/***/ 3021:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+function default_1(from, to, events) {
+    const fns = {};
+    for (const event of events) {
+        fns[event] = (...args) => {
+            to.emit(event, ...args);
+        };
+        from.on(event, fns[event]);
+    }
+    return () => {
+        for (const event of events) {
+            from.off(event, fns[event]);
+        }
+    };
+}
+exports.default = default_1;
+
+
+/***/ }),
+
+/***/ 2454:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TimeoutError = void 0;
+const net = __nccwpck_require__(1631);
+const unhandle_1 = __nccwpck_require__(1593);
+const reentry = Symbol('reentry');
+const noop = () => { };
+class TimeoutError extends Error {
+    constructor(threshold, event) {
+        super(`Timeout awaiting '${event}' for ${threshold}ms`);
+        this.event = event;
+        this.name = 'TimeoutError';
+        this.code = 'ETIMEDOUT';
+    }
+}
+exports.TimeoutError = TimeoutError;
+exports.default = (request, delays, options) => {
+    if (reentry in request) {
+        return noop;
+    }
+    request[reentry] = true;
+    const cancelers = [];
+    const { once, unhandleAll } = unhandle_1.default();
+    const addTimeout = (delay, callback, event) => {
+        var _a;
+        const timeout = setTimeout(callback, delay, delay, event);
+        (_a = timeout.unref) === null || _a === void 0 ? void 0 : _a.call(timeout);
+        const cancel = () => {
+            clearTimeout(timeout);
+        };
+        cancelers.push(cancel);
+        return cancel;
+    };
+    const { host, hostname } = options;
+    const timeoutHandler = (delay, event) => {
+        request.destroy(new TimeoutError(delay, event));
+    };
+    const cancelTimeouts = () => {
+        for (const cancel of cancelers) {
+            cancel();
+        }
+        unhandleAll();
+    };
+    request.once('error', error => {
+        cancelTimeouts();
+        // Save original behavior
+        /* istanbul ignore next */
+        if (request.listenerCount('error') === 0) {
+            throw error;
+        }
+    });
+    request.once('close', cancelTimeouts);
+    once(request, 'response', (response) => {
+        once(response, 'end', cancelTimeouts);
+    });
+    if (typeof delays.request !== 'undefined') {
+        addTimeout(delays.request, timeoutHandler, 'request');
+    }
+    if (typeof delays.socket !== 'undefined') {
+        const socketTimeoutHandler = () => {
+            timeoutHandler(delays.socket, 'socket');
+        };
+        request.setTimeout(delays.socket, socketTimeoutHandler);
+        // `request.setTimeout(0)` causes a memory leak.
+        // We can just remove the listener and forget about the timer - it's unreffed.
+        // See https://github.com/sindresorhus/got/issues/690
+        cancelers.push(() => {
+            request.removeListener('timeout', socketTimeoutHandler);
+        });
+    }
+    once(request, 'socket', (socket) => {
+        var _a;
+        const { socketPath } = request;
+        /* istanbul ignore next: hard to test */
+        if (socket.connecting) {
+            const hasPath = Boolean(socketPath !== null && socketPath !== void 0 ? socketPath : net.isIP((_a = hostname !== null && hostname !== void 0 ? hostname : host) !== null && _a !== void 0 ? _a : '') !== 0);
+            if (typeof delays.lookup !== 'undefined' && !hasPath && typeof socket.address().address === 'undefined') {
+                const cancelTimeout = addTimeout(delays.lookup, timeoutHandler, 'lookup');
+                once(socket, 'lookup', cancelTimeout);
+            }
+            if (typeof delays.connect !== 'undefined') {
+                const timeConnect = () => addTimeout(delays.connect, timeoutHandler, 'connect');
+                if (hasPath) {
+                    once(socket, 'connect', timeConnect());
+                }
+                else {
+                    once(socket, 'lookup', (error) => {
+                        if (error === null) {
+                            once(socket, 'connect', timeConnect());
+                        }
+                    });
+                }
+            }
+            if (typeof delays.secureConnect !== 'undefined' && options.protocol === 'https:') {
+                once(socket, 'connect', () => {
+                    const cancelTimeout = addTimeout(delays.secureConnect, timeoutHandler, 'secureConnect');
+                    once(socket, 'secureConnect', cancelTimeout);
+                });
+            }
+        }
+        if (typeof delays.send !== 'undefined') {
+            const timeRequest = () => addTimeout(delays.send, timeoutHandler, 'send');
+            /* istanbul ignore next: hard to test */
+            if (socket.connecting) {
+                once(socket, 'connect', () => {
+                    once(request, 'upload-complete', timeRequest());
+                });
+            }
+            else {
+                once(request, 'upload-complete', timeRequest());
+            }
+        }
+    });
+    if (typeof delays.response !== 'undefined') {
+        once(request, 'upload-complete', () => {
+            const cancelTimeout = addTimeout(delays.response, timeoutHandler, 'response');
+            once(request, 'response', cancelTimeout);
+        });
+    }
+    return cancelTimeouts;
+};
+
+
+/***/ }),
+
+/***/ 1593:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+// When attaching listeners, it's very easy to forget about them.
+// Especially if you do error handling and set timeouts.
+// So instead of checking if it's proper to throw an error on every timeout ever,
+// use this simple tool which will remove all listeners you have attached.
+exports.default = () => {
+    const handlers = [];
+    return {
+        once(origin, event, fn) {
+            origin.once(event, fn);
+            handlers.push({ origin, event, fn });
+        },
+        unhandleAll() {
+            for (const handler of handlers) {
+                const { origin, event, fn } = handler;
+                origin.removeListener(event, fn);
+            }
+            handlers.length = 0;
+        }
+    };
+};
+
+
+/***/ }),
+
+/***/ 8026:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const is_1 = __nccwpck_require__(7678);
+exports.default = (url) => {
+    // Cast to URL
+    url = url;
+    const options = {
+        protocol: url.protocol,
+        hostname: is_1.default.string(url.hostname) && url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname,
+        host: url.host,
+        hash: url.hash,
+        search: url.search,
+        pathname: url.pathname,
+        href: url.href,
+        path: `${url.pathname || ''}${url.search || ''}`
+    };
+    if (is_1.default.string(url.port) && url.port.length > 0) {
+        options.port = Number(url.port);
+    }
+    if (url.username || url.password) {
+        options.auth = `${url.username || ''}:${url.password || ''}`;
+    }
+    return options;
+};
+
+
+/***/ }),
+
+/***/ 7288:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+class WeakableMap {
+    constructor() {
+        this.weakMap = new WeakMap();
+        this.map = new Map();
+    }
+    set(key, value) {
+        if (typeof key === 'object') {
+            this.weakMap.set(key, value);
+        }
+        else {
+            this.map.set(key, value);
+        }
+    }
+    get(key) {
+        if (typeof key === 'object') {
+            return this.weakMap.get(key);
+        }
+        return this.map.get(key);
+    }
+    has(key) {
+        if (typeof key === 'object') {
+            return this.weakMap.has(key);
+        }
+        return this.map.has(key);
+    }
+}
+exports.default = WeakableMap;
+
+
+/***/ }),
+
+/***/ 4337:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.defaultHandler = void 0;
+const is_1 = __nccwpck_require__(7678);
+const as_promise_1 = __nccwpck_require__(6056);
+const create_rejection_1 = __nccwpck_require__(6457);
+const core_1 = __nccwpck_require__(94);
+const deep_freeze_1 = __nccwpck_require__(285);
+const errors = {
+    RequestError: as_promise_1.RequestError,
+    CacheError: as_promise_1.CacheError,
+    ReadError: as_promise_1.ReadError,
+    HTTPError: as_promise_1.HTTPError,
+    MaxRedirectsError: as_promise_1.MaxRedirectsError,
+    TimeoutError: as_promise_1.TimeoutError,
+    ParseError: as_promise_1.ParseError,
+    CancelError: as_promise_1.CancelError,
+    UnsupportedProtocolError: as_promise_1.UnsupportedProtocolError,
+    UploadError: as_promise_1.UploadError
+};
+// The `delay` package weighs 10KB (!)
+const delay = async (ms) => new Promise(resolve => {
+    setTimeout(resolve, ms);
+});
+const { normalizeArguments } = core_1.default;
+const mergeOptions = (...sources) => {
+    let mergedOptions;
+    for (const source of sources) {
+        mergedOptions = normalizeArguments(undefined, source, mergedOptions);
+    }
+    return mergedOptions;
+};
+const getPromiseOrStream = (options) => options.isStream ? new core_1.default(undefined, options) : as_promise_1.default(options);
+const isGotInstance = (value) => ('defaults' in value && 'options' in value.defaults);
+const aliases = [
+    'get',
+    'post',
+    'put',
+    'patch',
+    'head',
+    'delete'
+];
+exports.defaultHandler = (options, next) => next(options);
+const callInitHooks = (hooks, options) => {
+    if (hooks) {
+        for (const hook of hooks) {
+            hook(options);
+        }
+    }
+};
+const create = (defaults) => {
+    // Proxy properties from next handlers
+    defaults._rawHandlers = defaults.handlers;
+    defaults.handlers = defaults.handlers.map(fn => ((options, next) => {
+        // This will be assigned by assigning result
+        let root;
+        const result = fn(options, newOptions => {
+            root = next(newOptions);
+            return root;
+        });
+        if (result !== root && !options.isStream && root) {
+            const typedResult = result;
+            const { then: promiseThen, catch: promiseCatch, finally: promiseFianlly } = typedResult;
+            Object.setPrototypeOf(typedResult, Object.getPrototypeOf(root));
+            Object.defineProperties(typedResult, Object.getOwnPropertyDescriptors(root));
+            // These should point to the new promise
+            // eslint-disable-next-line promise/prefer-await-to-then
+            typedResult.then = promiseThen;
+            typedResult.catch = promiseCatch;
+            typedResult.finally = promiseFianlly;
+        }
+        return result;
+    }));
+    // Got interface
+    const got = ((url, options = {}, _defaults) => {
+        var _a, _b;
+        let iteration = 0;
+        const iterateHandlers = (newOptions) => {
+            return defaults.handlers[iteration++](newOptions, iteration === defaults.handlers.length ? getPromiseOrStream : iterateHandlers);
+        };
+        // TODO: Remove this in Got 12.
+        if (is_1.default.plainObject(url)) {
+            const mergedOptions = {
+                ...url,
+                ...options
+            };
+            core_1.setNonEnumerableProperties([url, options], mergedOptions);
+            options = mergedOptions;
+            url = undefined;
+        }
+        try {
+            // Call `init` hooks
+            let initHookError;
+            try {
+                callInitHooks(defaults.options.hooks.init, options);
+                callInitHooks((_a = options.hooks) === null || _a === void 0 ? void 0 : _a.init, options);
+            }
+            catch (error) {
+                initHookError = error;
+            }
+            // Normalize options & call handlers
+            const normalizedOptions = normalizeArguments(url, options, _defaults !== null && _defaults !== void 0 ? _defaults : defaults.options);
+            normalizedOptions[core_1.kIsNormalizedAlready] = true;
+            if (initHookError) {
+                throw new as_promise_1.RequestError(initHookError.message, initHookError, normalizedOptions);
+            }
+            return iterateHandlers(normalizedOptions);
+        }
+        catch (error) {
+            if (options.isStream) {
+                throw error;
+            }
+            else {
+                return create_rejection_1.default(error, defaults.options.hooks.beforeError, (_b = options.hooks) === null || _b === void 0 ? void 0 : _b.beforeError);
+            }
+        }
+    });
+    got.extend = (...instancesOrOptions) => {
+        const optionsArray = [defaults.options];
+        let handlers = [...defaults._rawHandlers];
+        let isMutableDefaults;
+        for (const value of instancesOrOptions) {
+            if (isGotInstance(value)) {
+                optionsArray.push(value.defaults.options);
+                handlers.push(...value.defaults._rawHandlers);
+                isMutableDefaults = value.defaults.mutableDefaults;
+            }
+            else {
+                optionsArray.push(value);
+                if ('handlers' in value) {
+                    handlers.push(...value.handlers);
+                }
+                isMutableDefaults = value.mutableDefaults;
+            }
+        }
+        handlers = handlers.filter(handler => handler !== exports.defaultHandler);
+        if (handlers.length === 0) {
+            handlers.push(exports.defaultHandler);
+        }
+        return create({
+            options: mergeOptions(...optionsArray),
+            handlers,
+            mutableDefaults: Boolean(isMutableDefaults)
+        });
+    };
+    // Pagination
+    const paginateEach = (async function* (url, options) {
+        // TODO: Remove this `@ts-expect-error` when upgrading to TypeScript 4.
+        // Error: Argument of type 'Merge<Options, PaginationOptions<T, R>> | undefined' is not assignable to parameter of type 'Options | undefined'.
+        // @ts-expect-error
+        let normalizedOptions = normalizeArguments(url, options, defaults.options);
+        normalizedOptions.resolveBodyOnly = false;
+        const pagination = normalizedOptions.pagination;
+        if (!is_1.default.object(pagination)) {
+            throw new TypeError('`options.pagination` must be implemented');
+        }
+        const all = [];
+        let { countLimit } = pagination;
+        let numberOfRequests = 0;
+        while (numberOfRequests < pagination.requestLimit) {
+            if (numberOfRequests !== 0) {
+                // eslint-disable-next-line no-await-in-loop
+                await delay(pagination.backoff);
+            }
+            // @ts-expect-error FIXME!
+            // TODO: Throw when result is not an instance of Response
+            // eslint-disable-next-line no-await-in-loop
+            const result = (await got(undefined, undefined, normalizedOptions));
+            // eslint-disable-next-line no-await-in-loop
+            const parsed = await pagination.transform(result);
+            const current = [];
+            for (const item of parsed) {
+                if (pagination.filter(item, all, current)) {
+                    if (!pagination.shouldContinue(item, all, current)) {
+                        return;
+                    }
+                    yield item;
+                    if (pagination.stackAllItems) {
+                        all.push(item);
+                    }
+                    current.push(item);
+                    if (--countLimit <= 0) {
+                        return;
+                    }
+                }
+            }
+            const optionsToMerge = pagination.paginate(result, all, current);
+            if (optionsToMerge === false) {
+                return;
+            }
+            if (optionsToMerge === result.request.options) {
+                normalizedOptions = result.request.options;
+            }
+            else if (optionsToMerge !== undefined) {
+                normalizedOptions = normalizeArguments(undefined, optionsToMerge, normalizedOptions);
+            }
+            numberOfRequests++;
+        }
+    });
+    got.paginate = paginateEach;
+    got.paginate.all = (async (url, options) => {
+        const results = [];
+        for await (const item of paginateEach(url, options)) {
+            results.push(item);
+        }
+        return results;
+    });
+    // For those who like very descriptive names
+    got.paginate.each = paginateEach;
+    // Stream API
+    got.stream = ((url, options) => got(url, { ...options, isStream: true }));
+    // Shortcuts
+    for (const method of aliases) {
+        got[method] = ((url, options) => got(url, { ...options, method }));
+        got.stream[method] = ((url, options) => {
+            return got(url, { ...options, method, isStream: true });
+        });
+    }
+    Object.assign(got, errors);
+    Object.defineProperty(got, 'defaults', {
+        value: defaults.mutableDefaults ? defaults : deep_freeze_1.default(defaults),
+        writable: defaults.mutableDefaults,
+        configurable: defaults.mutableDefaults,
+        enumerable: true
+    });
+    got.mergeOptions = mergeOptions;
+    return got;
+};
+exports.default = create;
+__exportStar(__nccwpck_require__(2613), exports);
+
+
+/***/ }),
+
+/***/ 3061:
+/***/ (function(module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const url_1 = __nccwpck_require__(8835);
+const create_1 = __nccwpck_require__(4337);
+const defaults = {
+    options: {
+        method: 'GET',
+        retry: {
+            limit: 2,
+            methods: [
+                'GET',
+                'PUT',
+                'HEAD',
+                'DELETE',
+                'OPTIONS',
+                'TRACE'
+            ],
+            statusCodes: [
+                408,
+                413,
+                429,
+                500,
+                502,
+                503,
+                504,
+                521,
+                522,
+                524
+            ],
+            errorCodes: [
+                'ETIMEDOUT',
+                'ECONNRESET',
+                'EADDRINUSE',
+                'ECONNREFUSED',
+                'EPIPE',
+                'ENOTFOUND',
+                'ENETUNREACH',
+                'EAI_AGAIN'
+            ],
+            maxRetryAfter: undefined,
+            calculateDelay: ({ computedValue }) => computedValue
+        },
+        timeout: {},
+        headers: {
+            'user-agent': 'got (https://github.com/sindresorhus/got)'
+        },
+        hooks: {
+            init: [],
+            beforeRequest: [],
+            beforeRedirect: [],
+            beforeRetry: [],
+            beforeError: [],
+            afterResponse: []
+        },
+        cache: undefined,
+        dnsCache: undefined,
+        decompress: true,
+        throwHttpErrors: true,
+        followRedirect: true,
+        isStream: false,
+        responseType: 'text',
+        resolveBodyOnly: false,
+        maxRedirects: 10,
+        prefixUrl: '',
+        methodRewriting: true,
+        ignoreInvalidCookies: false,
+        context: {},
+        // TODO: Set this to `true` when Got 12 gets released
+        http2: false,
+        allowGetBody: false,
+        https: undefined,
+        pagination: {
+            transform: (response) => {
+                if (response.request.options.responseType === 'json') {
+                    return response.body;
+                }
+                return JSON.parse(response.body);
+            },
+            paginate: response => {
+                if (!Reflect.has(response.headers, 'link')) {
+                    return false;
+                }
+                const items = response.headers.link.split(',');
+                let next;
+                for (const item of items) {
+                    const parsed = item.split(';');
+                    if (parsed[1].includes('next')) {
+                        next = parsed[0].trimStart().trim();
+                        next = next.slice(1, -1);
+                        break;
+                    }
+                }
+                if (next) {
+                    const options = {
+                        url: new url_1.URL(next)
+                    };
+                    return options;
+                }
+                return false;
+            },
+            filter: () => true,
+            shouldContinue: () => true,
+            countLimit: Infinity,
+            backoff: 0,
+            requestLimit: 10000,
+            stackAllItems: true
+        },
+        parseJson: (text) => JSON.parse(text),
+        stringifyJson: (object) => JSON.stringify(object),
+        cacheOptions: {}
+    },
+    handlers: [create_1.defaultHandler],
+    mutableDefaults: false
+};
+const got = create_1.default(defaults);
+exports.default = got;
+// For CommonJS default export support
+module.exports = got;
+module.exports.default = got;
+module.exports.__esModule = true; // Workaround for TS issue: https://github.com/sindresorhus/got/pull/1267
+__exportStar(__nccwpck_require__(4337), exports);
+__exportStar(__nccwpck_require__(6056), exports);
+
+
+/***/ }),
+
+/***/ 2613:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+
+/***/ }),
+
+/***/ 285:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const is_1 = __nccwpck_require__(7678);
+function deepFreeze(object) {
+    for (const value of Object.values(object)) {
+        if (is_1.default.plainObject(value) || is_1.default.array(value)) {
+            deepFreeze(value);
+        }
+    }
+    return Object.freeze(object);
+}
+exports.default = deepFreeze;
+
+
+/***/ }),
+
+/***/ 397:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const alreadyWarned = new Set();
+exports.default = (message) => {
+    if (alreadyWarned.has(message)) {
+        return;
+    }
+    alreadyWarned.add(message);
+    // @ts-expect-error Missing types.
+    process.emitWarning(`Got: ${message}`, {
+        type: 'DeprecationWarning'
+    });
+};
+
+
+/***/ }),
+
+/***/ 1002:
+/***/ ((module) => {
+
+"use strict";
+
+// rfc7231 6.1
+const statusCodeCacheableByDefault = new Set([
+    200,
+    203,
+    204,
+    206,
+    300,
+    301,
+    404,
+    405,
+    410,
+    414,
+    501,
+]);
+
+// This implementation does not understand partial responses (206)
+const understoodStatuses = new Set([
+    200,
+    203,
+    204,
+    300,
+    301,
+    302,
+    303,
+    307,
+    308,
+    404,
+    405,
+    410,
+    414,
+    501,
+]);
+
+const errorStatusCodes = new Set([
+    500,
+    502,
+    503, 
+    504,
+]);
+
+const hopByHopHeaders = {
+    date: true, // included, because we add Age update Date
+    connection: true,
+    'keep-alive': true,
+    'proxy-authenticate': true,
+    'proxy-authorization': true,
+    te: true,
+    trailer: true,
+    'transfer-encoding': true,
+    upgrade: true,
+};
+
+const excludedFromRevalidationUpdate = {
+    // Since the old body is reused, it doesn't make sense to change properties of the body
+    'content-length': true,
+    'content-encoding': true,
+    'transfer-encoding': true,
+    'content-range': true,
+};
+
+function toNumberOrZero(s) {
+    const n = parseInt(s, 10);
+    return isFinite(n) ? n : 0;
+}
+
+// RFC 5861
+function isErrorResponse(response) {
+    // consider undefined response as faulty
+    if(!response) {
+        return true
+    }
+    return errorStatusCodes.has(response.status);
+}
+
+function parseCacheControl(header) {
+    const cc = {};
+    if (!header) return cc;
+
+    // TODO: When there is more than one value present for a given directive (e.g., two Expires header fields, multiple Cache-Control: max-age directives),
+    // the directive's value is considered invalid. Caches are encouraged to consider responses that have invalid freshness information to be stale
+    const parts = header.trim().split(/\s*,\s*/); // TODO: lame parsing
+    for (const part of parts) {
+        const [k, v] = part.split(/\s*=\s*/, 2);
+        cc[k] = v === undefined ? true : v.replace(/^"|"$/g, ''); // TODO: lame unquoting
     }
 
-    var keys = Object.keys(langs).filter(function (key) {
-        if (typeof langs[key] !== 'string') {
+    return cc;
+}
+
+function formatCacheControl(cc) {
+    let parts = [];
+    for (const k in cc) {
+        const v = cc[k];
+        parts.push(v === true ? k : k + '=' + v);
+    }
+    if (!parts.length) {
+        return undefined;
+    }
+    return parts.join(', ');
+}
+
+module.exports = class CachePolicy {
+    constructor(
+        req,
+        res,
+        {
+            shared,
+            cacheHeuristic,
+            immutableMinTimeToLive,
+            ignoreCargoCult,
+            _fromObject,
+        } = {}
+    ) {
+        if (_fromObject) {
+            this._fromObject(_fromObject);
+            return;
+        }
+
+        if (!res || !res.headers) {
+            throw Error('Response headers missing');
+        }
+        this._assertRequestHasHeaders(req);
+
+        this._responseTime = this.now();
+        this._isShared = shared !== false;
+        this._cacheHeuristic =
+            undefined !== cacheHeuristic ? cacheHeuristic : 0.1; // 10% matches IE
+        this._immutableMinTtl =
+            undefined !== immutableMinTimeToLive
+                ? immutableMinTimeToLive
+                : 24 * 3600 * 1000;
+
+        this._status = 'status' in res ? res.status : 200;
+        this._resHeaders = res.headers;
+        this._rescc = parseCacheControl(res.headers['cache-control']);
+        this._method = 'method' in req ? req.method : 'GET';
+        this._url = req.url;
+        this._host = req.headers.host;
+        this._noAuthorization = !req.headers.authorization;
+        this._reqHeaders = res.headers.vary ? req.headers : null; // Don't keep all request headers if they won't be used
+        this._reqcc = parseCacheControl(req.headers['cache-control']);
+
+        // Assume that if someone uses legacy, non-standard uncecessary options they don't understand caching,
+        // so there's no point stricly adhering to the blindly copy&pasted directives.
+        if (
+            ignoreCargoCult &&
+            'pre-check' in this._rescc &&
+            'post-check' in this._rescc
+        ) {
+            delete this._rescc['pre-check'];
+            delete this._rescc['post-check'];
+            delete this._rescc['no-cache'];
+            delete this._rescc['no-store'];
+            delete this._rescc['must-revalidate'];
+            this._resHeaders = Object.assign({}, this._resHeaders, {
+                'cache-control': formatCacheControl(this._rescc),
+            });
+            delete this._resHeaders.expires;
+            delete this._resHeaders.pragma;
+        }
+
+        // When the Cache-Control header field is not present in a request, caches MUST consider the no-cache request pragma-directive
+        // as having the same effect as if "Cache-Control: no-cache" were present (see Section 5.2.1).
+        if (
+            res.headers['cache-control'] == null &&
+            /no-cache/.test(res.headers.pragma)
+        ) {
+            this._rescc['no-cache'] = true;
+        }
+    }
+
+    now() {
+        return Date.now();
+    }
+
+    storable() {
+        // The "no-store" request directive indicates that a cache MUST NOT store any part of either this request or any response to it.
+        return !!(
+            !this._reqcc['no-store'] &&
+            // A cache MUST NOT store a response to any request, unless:
+            // The request method is understood by the cache and defined as being cacheable, and
+            ('GET' === this._method ||
+                'HEAD' === this._method ||
+                ('POST' === this._method && this._hasExplicitExpiration())) &&
+            // the response status code is understood by the cache, and
+            understoodStatuses.has(this._status) &&
+            // the "no-store" cache directive does not appear in request or response header fields, and
+            !this._rescc['no-store'] &&
+            // the "private" response directive does not appear in the response, if the cache is shared, and
+            (!this._isShared || !this._rescc.private) &&
+            // the Authorization header field does not appear in the request, if the cache is shared,
+            (!this._isShared ||
+                this._noAuthorization ||
+                this._allowsStoringAuthenticated()) &&
+            // the response either:
+            // contains an Expires header field, or
+            (this._resHeaders.expires ||
+                // contains a max-age response directive, or
+                // contains a s-maxage response directive and the cache is shared, or
+                // contains a public response directive.
+                this._rescc['max-age'] ||
+                (this._isShared && this._rescc['s-maxage']) ||
+                this._rescc.public ||
+                // has a status code that is defined as cacheable by default
+                statusCodeCacheableByDefault.has(this._status))
+        );
+    }
+
+    _hasExplicitExpiration() {
+        // 4.2.1 Calculating Freshness Lifetime
+        return (
+            (this._isShared && this._rescc['s-maxage']) ||
+            this._rescc['max-age'] ||
+            this._resHeaders.expires
+        );
+    }
+
+    _assertRequestHasHeaders(req) {
+        if (!req || !req.headers) {
+            throw Error('Request headers missing');
+        }
+    }
+
+    satisfiesWithoutRevalidation(req) {
+        this._assertRequestHasHeaders(req);
+
+        // When presented with a request, a cache MUST NOT reuse a stored response, unless:
+        // the presented request does not contain the no-cache pragma (Section 5.4), nor the no-cache cache directive,
+        // unless the stored response is successfully validated (Section 4.3), and
+        const requestCC = parseCacheControl(req.headers['cache-control']);
+        if (requestCC['no-cache'] || /no-cache/.test(req.headers.pragma)) {
             return false;
         }
 
-        return langs[key].toLowerCase() === desiredLang;
-    });
-
-    return keys[0] || false;
-}
-
-/**
- * Returns true if the desiredLang is supported by Google Translate and false otherwise
- * @param desiredLang – the ISO 639-1 code or the name of the desired language
- * @returns {boolean}
- */
-function isSupported(desiredLang) {
-    return Boolean(getCode(desiredLang));
-}
-
-module.exports = langs;
-module.exports.isSupported = isSupported;
-module.exports.getCode = getCode;
-
-
-/***/ }),
-
-/***/ 7637:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-/**
- * Last update: 2016/06/26
- * https://translate.google.com/translate/releases/twsfe_w_20160620_RC00/r/js/desktop_module_main.js
- *
- * Everything between 'BEGIN' and 'END' was copied from the url above.
- */
-
-var got = __nccwpck_require__(3798);
-var Configstore = __nccwpck_require__(594);
-
-/* eslint-disable */
-// BEGIN
-
-function sM(a) {
-    var b;
-    if (null !== yr)
-        b = yr;
-    else {
-        b = wr(String.fromCharCode(84));
-        var c = wr(String.fromCharCode(75));
-        b = [b(), b()];
-        b[1] = c();
-        b = (yr = window[b.join(c())] || "") || ""
-    }
-    var d = wr(String.fromCharCode(116))
-        , c = wr(String.fromCharCode(107))
-        , d = [d(), d()];
-    d[1] = c();
-    c = "&" + d.join("") + "=";
-    d = b.split(".");
-    b = Number(d[0]) || 0;
-    for (var e = [], f = 0, g = 0; g < a.length; g++) {
-        var l = a.charCodeAt(g);
-        128 > l ? e[f++] = l : (2048 > l ? e[f++] = l >> 6 | 192 : (55296 == (l & 64512) && g + 1 < a.length && 56320 == (a.charCodeAt(g + 1) & 64512) ? (l = 65536 + ((l & 1023) << 10) + (a.charCodeAt(++g) & 1023),
-            e[f++] = l >> 18 | 240,
-            e[f++] = l >> 12 & 63 | 128) : e[f++] = l >> 12 | 224,
-            e[f++] = l >> 6 & 63 | 128),
-            e[f++] = l & 63 | 128)
-    }
-    a = b;
-    for (f = 0; f < e.length; f++)
-        a += e[f],
-            a = xr(a, "+-a^+6");
-    a = xr(a, "+-3^+b+-f");
-    a ^= Number(d[1]) || 0;
-    0 > a && (a = (a & 2147483647) + 2147483648);
-    a %= 1E6;
-    return c + (a.toString() + "." + (a ^ b))
-}
-
-var yr = null;
-var wr = function(a) {
-    return function() {
-        return a
-    }
-}
-    , xr = function(a, b) {
-    for (var c = 0; c < b.length - 2; c += 3) {
-        var d = b.charAt(c + 2)
-            , d = "a" <= d ? d.charCodeAt(0) - 87 : Number(d)
-            , d = "+" == b.charAt(c + 1) ? a >>> d : a << d;
-        a = "+" == b.charAt(c) ? a + d & 4294967295 : a ^ d
-    }
-    return a
-};
-
-// END
-/* eslint-enable */
-
-var config = new Configstore('google-translate-api');
-
-var window = {
-    TKK: config.get('TKK') || '0'
-};
-
-function updateTKK() {
-    return new Promise(function (resolve, reject) {
-        var now = Math.floor(Date.now() / 3600000);
-
-        if (Number(window.TKK.split('.')[0]) === now) {
-            resolve();
-        } else {
-            got('https://translate.google.com').then(function (res) {
-                var code = res.body.match(/TKK=(.*?)\(\)\)'\);/g);
-
-                if (code) {
-                    eval(code[0]);
-                    /* eslint-disable no-undef */
-                    if (typeof TKK !== 'undefined') {
-                        window.TKK = TKK;
-                        config.set('TKK', TKK);
-                    }
-                    /* eslint-enable no-undef */
-                }
-
-                /**
-                 * Note: If the regex or the eval fail, there is no need to worry. The server will accept
-                 * relatively old seeds.
-                 */
-
-                resolve();
-            }).catch(function (err) {
-                var e = new Error();
-                e.code = 'BAD_NETWORK';
-                e.message = err.message;
-                reject(e);
-            });
+        if (requestCC['max-age'] && this.age() > requestCC['max-age']) {
+            return false;
         }
-    });
-}
 
-function get(text) {
-    return updateTKK().then(function () {
-        var tk = sM(text);
-        tk = tk.replace('&tk=', '');
-        return {name: 'tk', value: tk};
-    }).catch(function (err) {
-        throw err;
-    });
-}
+        if (
+            requestCC['min-fresh'] &&
+            this.timeToLive() < 1000 * requestCC['min-fresh']
+        ) {
+            return false;
+        }
 
-module.exports.get = get;
+        // the stored response is either:
+        // fresh, or allowed to be served stale
+        if (this.stale()) {
+            const allowsStale =
+                requestCC['max-stale'] &&
+                !this._rescc['must-revalidate'] &&
+                (true === requestCC['max-stale'] ||
+                    requestCC['max-stale'] > this.age() - this.maxAge());
+            if (!allowsStale) {
+                return false;
+            }
+        }
+
+        return this._requestMatches(req, false);
+    }
+
+    _requestMatches(req, allowHeadMethod) {
+        // The presented effective request URI and that of the stored response match, and
+        return (
+            (!this._url || this._url === req.url) &&
+            this._host === req.headers.host &&
+            // the request method associated with the stored response allows it to be used for the presented request, and
+            (!req.method ||
+                this._method === req.method ||
+                (allowHeadMethod && 'HEAD' === req.method)) &&
+            // selecting header fields nominated by the stored response (if any) match those presented, and
+            this._varyMatches(req)
+        );
+    }
+
+    _allowsStoringAuthenticated() {
+        //  following Cache-Control response directives (Section 5.2.2) have such an effect: must-revalidate, public, and s-maxage.
+        return (
+            this._rescc['must-revalidate'] ||
+            this._rescc.public ||
+            this._rescc['s-maxage']
+        );
+    }
+
+    _varyMatches(req) {
+        if (!this._resHeaders.vary) {
+            return true;
+        }
+
+        // A Vary header field-value of "*" always fails to match
+        if (this._resHeaders.vary === '*') {
+            return false;
+        }
+
+        const fields = this._resHeaders.vary
+            .trim()
+            .toLowerCase()
+            .split(/\s*,\s*/);
+        for (const name of fields) {
+            if (req.headers[name] !== this._reqHeaders[name]) return false;
+        }
+        return true;
+    }
+
+    _copyWithoutHopByHopHeaders(inHeaders) {
+        const headers = {};
+        for (const name in inHeaders) {
+            if (hopByHopHeaders[name]) continue;
+            headers[name] = inHeaders[name];
+        }
+        // 9.1.  Connection
+        if (inHeaders.connection) {
+            const tokens = inHeaders.connection.trim().split(/\s*,\s*/);
+            for (const name of tokens) {
+                delete headers[name];
+            }
+        }
+        if (headers.warning) {
+            const warnings = headers.warning.split(/,/).filter(warning => {
+                return !/^\s*1[0-9][0-9]/.test(warning);
+            });
+            if (!warnings.length) {
+                delete headers.warning;
+            } else {
+                headers.warning = warnings.join(',').trim();
+            }
+        }
+        return headers;
+    }
+
+    responseHeaders() {
+        const headers = this._copyWithoutHopByHopHeaders(this._resHeaders);
+        const age = this.age();
+
+        // A cache SHOULD generate 113 warning if it heuristically chose a freshness
+        // lifetime greater than 24 hours and the response's age is greater than 24 hours.
+        if (
+            age > 3600 * 24 &&
+            !this._hasExplicitExpiration() &&
+            this.maxAge() > 3600 * 24
+        ) {
+            headers.warning =
+                (headers.warning ? `${headers.warning}, ` : '') +
+                '113 - "rfc7234 5.5.4"';
+        }
+        headers.age = `${Math.round(age)}`;
+        headers.date = new Date(this.now()).toUTCString();
+        return headers;
+    }
+
+    /**
+     * Value of the Date response header or current time if Date was invalid
+     * @return timestamp
+     */
+    date() {
+        const serverDate = Date.parse(this._resHeaders.date);
+        if (isFinite(serverDate)) {
+            return serverDate;
+        }
+        return this._responseTime;
+    }
+
+    /**
+     * Value of the Age header, in seconds, updated for the current time.
+     * May be fractional.
+     *
+     * @return Number
+     */
+    age() {
+        let age = this._ageValue();
+
+        const residentTime = (this.now() - this._responseTime) / 1000;
+        return age + residentTime;
+    }
+
+    _ageValue() {
+        return toNumberOrZero(this._resHeaders.age);
+    }
+
+    /**
+     * Value of applicable max-age (or heuristic equivalent) in seconds. This counts since response's `Date`.
+     *
+     * For an up-to-date value, see `timeToLive()`.
+     *
+     * @return Number
+     */
+    maxAge() {
+        if (!this.storable() || this._rescc['no-cache']) {
+            return 0;
+        }
+
+        // Shared responses with cookies are cacheable according to the RFC, but IMHO it'd be unwise to do so by default
+        // so this implementation requires explicit opt-in via public header
+        if (
+            this._isShared &&
+            (this._resHeaders['set-cookie'] &&
+                !this._rescc.public &&
+                !this._rescc.immutable)
+        ) {
+            return 0;
+        }
+
+        if (this._resHeaders.vary === '*') {
+            return 0;
+        }
+
+        if (this._isShared) {
+            if (this._rescc['proxy-revalidate']) {
+                return 0;
+            }
+            // if a response includes the s-maxage directive, a shared cache recipient MUST ignore the Expires field.
+            if (this._rescc['s-maxage']) {
+                return toNumberOrZero(this._rescc['s-maxage']);
+            }
+        }
+
+        // If a response includes a Cache-Control field with the max-age directive, a recipient MUST ignore the Expires field.
+        if (this._rescc['max-age']) {
+            return toNumberOrZero(this._rescc['max-age']);
+        }
+
+        const defaultMinTtl = this._rescc.immutable ? this._immutableMinTtl : 0;
+
+        const serverDate = this.date();
+        if (this._resHeaders.expires) {
+            const expires = Date.parse(this._resHeaders.expires);
+            // A cache recipient MUST interpret invalid date formats, especially the value "0", as representing a time in the past (i.e., "already expired").
+            if (Number.isNaN(expires) || expires < serverDate) {
+                return 0;
+            }
+            return Math.max(defaultMinTtl, (expires - serverDate) / 1000);
+        }
+
+        if (this._resHeaders['last-modified']) {
+            const lastModified = Date.parse(this._resHeaders['last-modified']);
+            if (isFinite(lastModified) && serverDate > lastModified) {
+                return Math.max(
+                    defaultMinTtl,
+                    ((serverDate - lastModified) / 1000) * this._cacheHeuristic
+                );
+            }
+        }
+
+        return defaultMinTtl;
+    }
+
+    timeToLive() {
+        const age = this.maxAge() - this.age();
+        const staleIfErrorAge = age + toNumberOrZero(this._rescc['stale-if-error']);
+        const staleWhileRevalidateAge = age + toNumberOrZero(this._rescc['stale-while-revalidate']);
+        return Math.max(0, age, staleIfErrorAge, staleWhileRevalidateAge) * 1000;
+    }
+
+    stale() {
+        return this.maxAge() <= this.age();
+    }
+
+    _useStaleIfError() {
+        return this.maxAge() + toNumberOrZero(this._rescc['stale-if-error']) > this.age();
+    }
+
+    useStaleWhileRevalidate() {
+        return this.maxAge() + toNumberOrZero(this._rescc['stale-while-revalidate']) > this.age();
+    }
+
+    static fromObject(obj) {
+        return new this(undefined, undefined, { _fromObject: obj });
+    }
+
+    _fromObject(obj) {
+        if (this._responseTime) throw Error('Reinitialized');
+        if (!obj || obj.v !== 1) throw Error('Invalid serialization');
+
+        this._responseTime = obj.t;
+        this._isShared = obj.sh;
+        this._cacheHeuristic = obj.ch;
+        this._immutableMinTtl =
+            obj.imm !== undefined ? obj.imm : 24 * 3600 * 1000;
+        this._status = obj.st;
+        this._resHeaders = obj.resh;
+        this._rescc = obj.rescc;
+        this._method = obj.m;
+        this._url = obj.u;
+        this._host = obj.h;
+        this._noAuthorization = obj.a;
+        this._reqHeaders = obj.reqh;
+        this._reqcc = obj.reqcc;
+    }
+
+    toObject() {
+        return {
+            v: 1,
+            t: this._responseTime,
+            sh: this._isShared,
+            ch: this._cacheHeuristic,
+            imm: this._immutableMinTtl,
+            st: this._status,
+            resh: this._resHeaders,
+            rescc: this._rescc,
+            m: this._method,
+            u: this._url,
+            h: this._host,
+            a: this._noAuthorization,
+            reqh: this._reqHeaders,
+            reqcc: this._reqcc,
+        };
+    }
+
+    /**
+     * Headers for sending to the origin server to revalidate stale response.
+     * Allows server to return 304 to allow reuse of the previous response.
+     *
+     * Hop by hop headers are always stripped.
+     * Revalidation headers may be added or removed, depending on request.
+     */
+    revalidationHeaders(incomingReq) {
+        this._assertRequestHasHeaders(incomingReq);
+        const headers = this._copyWithoutHopByHopHeaders(incomingReq.headers);
+
+        // This implementation does not understand range requests
+        delete headers['if-range'];
+
+        if (!this._requestMatches(incomingReq, true) || !this.storable()) {
+            // revalidation allowed via HEAD
+            // not for the same resource, or wasn't allowed to be cached anyway
+            delete headers['if-none-match'];
+            delete headers['if-modified-since'];
+            return headers;
+        }
+
+        /* MUST send that entity-tag in any cache validation request (using If-Match or If-None-Match) if an entity-tag has been provided by the origin server. */
+        if (this._resHeaders.etag) {
+            headers['if-none-match'] = headers['if-none-match']
+                ? `${headers['if-none-match']}, ${this._resHeaders.etag}`
+                : this._resHeaders.etag;
+        }
+
+        // Clients MAY issue simple (non-subrange) GET requests with either weak validators or strong validators. Clients MUST NOT use weak validators in other forms of request.
+        const forbidsWeakValidators =
+            headers['accept-ranges'] ||
+            headers['if-match'] ||
+            headers['if-unmodified-since'] ||
+            (this._method && this._method != 'GET');
+
+        /* SHOULD send the Last-Modified value in non-subrange cache validation requests (using If-Modified-Since) if only a Last-Modified value has been provided by the origin server.
+        Note: This implementation does not understand partial responses (206) */
+        if (forbidsWeakValidators) {
+            delete headers['if-modified-since'];
+
+            if (headers['if-none-match']) {
+                const etags = headers['if-none-match']
+                    .split(/,/)
+                    .filter(etag => {
+                        return !/^\s*W\//.test(etag);
+                    });
+                if (!etags.length) {
+                    delete headers['if-none-match'];
+                } else {
+                    headers['if-none-match'] = etags.join(',').trim();
+                }
+            }
+        } else if (
+            this._resHeaders['last-modified'] &&
+            !headers['if-modified-since']
+        ) {
+            headers['if-modified-since'] = this._resHeaders['last-modified'];
+        }
+
+        return headers;
+    }
+
+    /**
+     * Creates new CachePolicy with information combined from the previews response,
+     * and the new revalidation response.
+     *
+     * Returns {policy, modified} where modified is a boolean indicating
+     * whether the response body has been modified, and old cached body can't be used.
+     *
+     * @return {Object} {policy: CachePolicy, modified: Boolean}
+     */
+    revalidatedPolicy(request, response) {
+        this._assertRequestHasHeaders(request);
+        if(this._useStaleIfError() && isErrorResponse(response)) {  // I consider the revalidation request unsuccessful
+          return {
+            modified: false,
+            matches: false,
+            policy: this,
+          };
+        }
+        if (!response || !response.headers) {
+            throw Error('Response headers missing');
+        }
+
+        // These aren't going to be supported exactly, since one CachePolicy object
+        // doesn't know about all the other cached objects.
+        let matches = false;
+        if (response.status !== undefined && response.status != 304) {
+            matches = false;
+        } else if (
+            response.headers.etag &&
+            !/^\s*W\//.test(response.headers.etag)
+        ) {
+            // "All of the stored responses with the same strong validator are selected.
+            // If none of the stored responses contain the same strong validator,
+            // then the cache MUST NOT use the new response to update any stored responses."
+            matches =
+                this._resHeaders.etag &&
+                this._resHeaders.etag.replace(/^\s*W\//, '') ===
+                    response.headers.etag;
+        } else if (this._resHeaders.etag && response.headers.etag) {
+            // "If the new response contains a weak validator and that validator corresponds
+            // to one of the cache's stored responses,
+            // then the most recent of those matching stored responses is selected for update."
+            matches =
+                this._resHeaders.etag.replace(/^\s*W\//, '') ===
+                response.headers.etag.replace(/^\s*W\//, '');
+        } else if (this._resHeaders['last-modified']) {
+            matches =
+                this._resHeaders['last-modified'] ===
+                response.headers['last-modified'];
+        } else {
+            // If the new response does not include any form of validator (such as in the case where
+            // a client generates an If-Modified-Since request from a source other than the Last-Modified
+            // response header field), and there is only one stored response, and that stored response also
+            // lacks a validator, then that stored response is selected for update.
+            if (
+                !this._resHeaders.etag &&
+                !this._resHeaders['last-modified'] &&
+                !response.headers.etag &&
+                !response.headers['last-modified']
+            ) {
+                matches = true;
+            }
+        }
+
+        if (!matches) {
+            return {
+                policy: new this.constructor(request, response),
+                // Client receiving 304 without body, even if it's invalid/mismatched has no option
+                // but to reuse a cached body. We don't have a good way to tell clients to do
+                // error recovery in such case.
+                modified: response.status != 304,
+                matches: false,
+            };
+        }
+
+        // use other header fields provided in the 304 (Not Modified) response to replace all instances
+        // of the corresponding header fields in the stored response.
+        const headers = {};
+        for (const k in this._resHeaders) {
+            headers[k] =
+                k in response.headers && !excludedFromRevalidationUpdate[k]
+                    ? response.headers[k]
+                    : this._resHeaders[k];
+        }
+
+        const newResponse = Object.assign({}, response, {
+            status: this._status,
+            method: this._method,
+            headers,
+        });
+        return {
+            policy: new this.constructor(request, newResponse, {
+                shared: this._isShared,
+                cacheHeuristic: this._cacheHeuristic,
+                immutableMinTimeToLive: this._immutableMinTtl,
+            }),
+            modified: false,
+            matches: true,
+        };
+    }
+};
 
 
 /***/ }),
 
-/***/ 3798:
+/***/ 9898:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
 
 const EventEmitter = __nccwpck_require__(8614);
-const http = __nccwpck_require__(8605);
-const https = __nccwpck_require__(7211);
-const PassThrough = __nccwpck_require__(2413).PassThrough;
-const urlLib = __nccwpck_require__(8835);
-const querystring = __nccwpck_require__(1191);
-const duplexer3 = __nccwpck_require__(7994);
-const isStream = __nccwpck_require__(1554);
-const getStream = __nccwpck_require__(1766);
-const timedOut = __nccwpck_require__(9478);
-const urlParseLax = __nccwpck_require__(3194);
-const lowercaseKeys = __nccwpck_require__(9662);
-const isRedirect = __nccwpck_require__(4409);
-const unzipResponse = __nccwpck_require__(9428);
-const createErrorClass = __nccwpck_require__(4532);
-const isRetryAllowed = __nccwpck_require__(841);
-const Buffer = __nccwpck_require__(1867).Buffer;
-const pkg = __nccwpck_require__(9248);
+const tls = __nccwpck_require__(4016);
+const http2 = __nccwpck_require__(7565);
+const QuickLRU = __nccwpck_require__(9273);
 
-function requestAsEventEmitter(opts) {
-	opts = opts || {};
+const kCurrentStreamsCount = Symbol('currentStreamsCount');
+const kRequest = Symbol('request');
+const kOriginSet = Symbol('cachedOriginSet');
+const kGracefullyClosing = Symbol('gracefullyClosing');
 
-	const ee = new EventEmitter();
-	const requestUrl = opts.href || urlLib.resolve(urlLib.format(opts), opts.path);
-	let redirectCount = 0;
-	let retryCount = 0;
-	let redirectUrl;
+const nameKeys = [
+	// `http2.connect()` options
+	'maxDeflateDynamicTableSize',
+	'maxSessionMemory',
+	'maxHeaderListPairs',
+	'maxOutstandingPings',
+	'maxReservedRemoteStreams',
+	'maxSendHeaderBlockLength',
+	'paddingStrategy',
 
-	const get = opts => {
-		const fn = opts.protocol === 'https:' ? https : http;
+	// `tls.connect()` options
+	'localAddress',
+	'path',
+	'rejectUnauthorized',
+	'minDHSize',
 
-		const req = fn.request(opts, res => {
-			const statusCode = res.statusCode;
+	// `tls.createSecureContext()` options
+	'ca',
+	'cert',
+	'clientCertEngine',
+	'ciphers',
+	'key',
+	'pfx',
+	'servername',
+	'minVersion',
+	'maxVersion',
+	'secureProtocol',
+	'crl',
+	'honorCipherOrder',
+	'ecdhCurve',
+	'dhparam',
+	'secureOptions',
+	'sessionIdContext'
+];
 
-			if (isRedirect(statusCode) && opts.followRedirect && 'location' in res.headers && (opts.method === 'GET' || opts.method === 'HEAD')) {
-				res.resume();
+const getSortedIndex = (array, value, compare) => {
+	let low = 0;
+	let high = array.length;
 
-				if (++redirectCount > 10) {
-					ee.emit('error', new got.MaxRedirectsError(statusCode, opts), null, res);
-					return;
+	while (low < high) {
+		const mid = (low + high) >>> 1;
+
+		/* istanbul ignore next */
+		if (compare(array[mid], value)) {
+			// This never gets called because we use descending sort. Better to have this anyway.
+			low = mid + 1;
+		} else {
+			high = mid;
+		}
+	}
+
+	return low;
+};
+
+const compareSessions = (a, b) => {
+	return a.remoteSettings.maxConcurrentStreams > b.remoteSettings.maxConcurrentStreams;
+};
+
+// See https://tools.ietf.org/html/rfc8336
+const closeCoveredSessions = (where, session) => {
+	// Clients SHOULD NOT emit new requests on any connection whose Origin
+	// Set is a proper subset of another connection's Origin Set, and they
+	// SHOULD close it once all outstanding requests are satisfied.
+	for (const coveredSession of where) {
+		if (
+			// The set is a proper subset when its length is less than the other set.
+			coveredSession[kOriginSet].length < session[kOriginSet].length &&
+
+			// And the other set includes all elements of the subset.
+			coveredSession[kOriginSet].every(origin => session[kOriginSet].includes(origin)) &&
+
+			// Makes sure that the session can handle all requests from the covered session.
+			coveredSession[kCurrentStreamsCount] + session[kCurrentStreamsCount] <= session.remoteSettings.maxConcurrentStreams
+		) {
+			// This allows pending requests to finish and prevents making new requests.
+			gracefullyClose(coveredSession);
+		}
+	}
+};
+
+// This is basically inverted `closeCoveredSessions(...)`.
+const closeSessionIfCovered = (where, coveredSession) => {
+	for (const session of where) {
+		if (
+			coveredSession[kOriginSet].length < session[kOriginSet].length &&
+			coveredSession[kOriginSet].every(origin => session[kOriginSet].includes(origin)) &&
+			coveredSession[kCurrentStreamsCount] + session[kCurrentStreamsCount] <= session.remoteSettings.maxConcurrentStreams
+		) {
+			gracefullyClose(coveredSession);
+		}
+	}
+};
+
+const getSessions = ({agent, isFree}) => {
+	const result = {};
+
+	// eslint-disable-next-line guard-for-in
+	for (const normalizedOptions in agent.sessions) {
+		const sessions = agent.sessions[normalizedOptions];
+
+		const filtered = sessions.filter(session => {
+			const result = session[Agent.kCurrentStreamsCount] < session.remoteSettings.maxConcurrentStreams;
+
+			return isFree ? result : !result;
+		});
+
+		if (filtered.length !== 0) {
+			result[normalizedOptions] = filtered;
+		}
+	}
+
+	return result;
+};
+
+const gracefullyClose = session => {
+	session[kGracefullyClosing] = true;
+
+	if (session[kCurrentStreamsCount] === 0) {
+		session.close();
+	}
+};
+
+class Agent extends EventEmitter {
+	constructor({timeout = 60000, maxSessions = Infinity, maxFreeSessions = 10, maxCachedTlsSessions = 100} = {}) {
+		super();
+
+		// A session is considered busy when its current streams count
+		// is equal to or greater than the `maxConcurrentStreams` value.
+
+		// A session is considered free when its current streams count
+		// is less than the `maxConcurrentStreams` value.
+
+		// SESSIONS[NORMALIZED_OPTIONS] = [];
+		this.sessions = {};
+
+		// The queue for creating new sessions. It looks like this:
+		// QUEUE[NORMALIZED_OPTIONS][NORMALIZED_ORIGIN] = ENTRY_FUNCTION
+		//
+		// The entry function has `listeners`, `completed` and `destroyed` properties.
+		// `listeners` is an array of objects containing `resolve` and `reject` functions.
+		// `completed` is a boolean. It's set to true after ENTRY_FUNCTION is executed.
+		// `destroyed` is a boolean. If it's set to true, the session will be destroyed if hasn't connected yet.
+		this.queue = {};
+
+		// Each session will use this timeout value.
+		this.timeout = timeout;
+
+		// Max sessions in total
+		this.maxSessions = maxSessions;
+
+		// Max free sessions in total
+		// TODO: decreasing `maxFreeSessions` should close some sessions
+		this.maxFreeSessions = maxFreeSessions;
+
+		this._freeSessionsCount = 0;
+		this._sessionsCount = 0;
+
+		// We don't support push streams by default.
+		this.settings = {
+			enablePush: false
+		};
+
+		// Reusing TLS sessions increases performance.
+		this.tlsSessionCache = new QuickLRU({maxSize: maxCachedTlsSessions});
+	}
+
+	static normalizeOrigin(url, servername) {
+		if (typeof url === 'string') {
+			url = new URL(url);
+		}
+
+		if (servername && url.hostname !== servername) {
+			url.hostname = servername;
+		}
+
+		return url.origin;
+	}
+
+	normalizeOptions(options) {
+		let normalized = '';
+
+		if (options) {
+			for (const key of nameKeys) {
+				if (options[key]) {
+					normalized += `:${options[key]}`;
+				}
+			}
+		}
+
+		return normalized;
+	}
+
+	_tryToCreateNewSession(normalizedOptions, normalizedOrigin) {
+		if (!(normalizedOptions in this.queue) || !(normalizedOrigin in this.queue[normalizedOptions])) {
+			return;
+		}
+
+		const item = this.queue[normalizedOptions][normalizedOrigin];
+
+		// The entry function can be run only once.
+		// BUG: The session may be never created when:
+		// - the first condition is false AND
+		// - this function is never called with the same arguments in the future.
+		if (this._sessionsCount < this.maxSessions && !item.completed) {
+			item.completed = true;
+
+			item();
+		}
+	}
+
+	getSession(origin, options, listeners) {
+		return new Promise((resolve, reject) => {
+			if (Array.isArray(listeners)) {
+				listeners = [...listeners];
+
+				// Resolve the current promise ASAP, we're just moving the listeners.
+				// They will be executed at a different time.
+				resolve();
+			} else {
+				listeners = [{resolve, reject}];
+			}
+
+			const normalizedOptions = this.normalizeOptions(options);
+			const normalizedOrigin = Agent.normalizeOrigin(origin, options && options.servername);
+
+			if (normalizedOrigin === undefined) {
+				for (const {reject} of listeners) {
+					reject(new TypeError('The `origin` argument needs to be a string or an URL object'));
 				}
 
-				const bufferString = Buffer.from(res.headers.location, 'binary').toString();
-
-				redirectUrl = urlLib.resolve(urlLib.format(opts), bufferString);
-				const redirectOpts = Object.assign({}, opts, urlLib.parse(redirectUrl));
-
-				ee.emit('redirect', res, redirectOpts);
-
-				get(redirectOpts);
-
 				return;
 			}
 
-			setImmediate(() => {
-				const response = typeof unzipResponse === 'function' && req.method !== 'HEAD' ? unzipResponse(res) : res;
-				response.url = redirectUrl || requestUrl;
-				response.requestUrl = requestUrl;
+			if (normalizedOptions in this.sessions) {
+				const sessions = this.sessions[normalizedOptions];
 
-				ee.emit('response', response);
-			});
-		});
+				let maxConcurrentStreams = -1;
+				let currentStreamsCount = -1;
+				let optimalSession;
 
-		req.once('error', err => {
-			const backoff = opts.retries(++retryCount, err);
+				// We could just do this.sessions[normalizedOptions].find(...) but that isn't optimal.
+				// Additionally, we are looking for session which has biggest current pending streams count.
+				for (const session of sessions) {
+					const sessionMaxConcurrentStreams = session.remoteSettings.maxConcurrentStreams;
 
-			if (backoff) {
-				setTimeout(get, backoff, opts);
-				return;
-			}
+					if (sessionMaxConcurrentStreams < maxConcurrentStreams) {
+						break;
+					}
 
-			ee.emit('error', new got.RequestError(err, opts));
-		});
+					if (session[kOriginSet].includes(normalizedOrigin)) {
+						const sessionCurrentStreamsCount = session[kCurrentStreamsCount];
 
-		if (opts.gotTimeout) {
-			timedOut(req, opts.gotTimeout);
-		}
+						if (
+							sessionCurrentStreamsCount >= sessionMaxConcurrentStreams ||
+							session[kGracefullyClosing] ||
+							// Unfortunately the `close` event isn't called immediately,
+							// so `session.destroyed` is `true`, but `session.closed` is `false`.
+							session.destroyed
+						) {
+							continue;
+						}
 
-		setImmediate(() => {
-			ee.emit('request', req);
-		});
-	};
+						// We only need set this once.
+						if (!optimalSession) {
+							maxConcurrentStreams = sessionMaxConcurrentStreams;
+						}
 
-	get(opts);
-	return ee;
-}
-
-function asPromise(opts) {
-	return new Promise((resolve, reject) => {
-		const ee = requestAsEventEmitter(opts);
-
-		ee.on('request', req => {
-			if (isStream(opts.body)) {
-				opts.body.pipe(req);
-				opts.body = undefined;
-				return;
-			}
-
-			req.end(opts.body);
-		});
-
-		ee.on('response', res => {
-			const stream = opts.encoding === null ? getStream.buffer(res) : getStream(res, opts);
-
-			stream
-				.catch(err => reject(new got.ReadError(err, opts)))
-				.then(data => {
-					const statusCode = res.statusCode;
-					const limitStatusCode = opts.followRedirect ? 299 : 399;
-
-					res.body = data;
-
-					if (opts.json && res.body) {
-						try {
-							res.body = JSON.parse(res.body);
-						} catch (e) {
-							throw new got.ParseError(e, statusCode, opts, data);
+						// We're looking for the session which has biggest current pending stream count,
+						// in order to minimalize the amount of active sessions.
+						if (sessionCurrentStreamsCount > currentStreamsCount) {
+							optimalSession = session;
+							currentStreamsCount = sessionCurrentStreamsCount;
 						}
 					}
+				}
 
-					if (statusCode < 200 || statusCode > limitStatusCode) {
-						throw new got.HTTPError(statusCode, opts);
+				if (optimalSession) {
+					/* istanbul ignore next: safety check */
+					if (listeners.length !== 1) {
+						for (const {reject} of listeners) {
+							const error = new Error(
+								`Expected the length of listeners to be 1, got ${listeners.length}.\n` +
+								'Please report this to https://github.com/szmarczak/http2-wrapper/'
+							);
+
+							reject(error);
+						}
+
+						return;
 					}
 
-					resolve(res);
-				})
-				.catch(err => {
-					Object.defineProperty(err, 'response', {value: res});
-					reject(err);
-				});
-		});
-
-		ee.on('error', reject);
-	});
-}
-
-function asStream(opts) {
-	const input = new PassThrough();
-	const output = new PassThrough();
-	const proxy = duplexer3(input, output);
-
-	if (opts.json) {
-		throw new Error('got can not be used as stream when options.json is used');
-	}
-
-	if (opts.body) {
-		proxy.write = () => {
-			throw new Error('got\'s stream is not writable when options.body is used');
-		};
-	}
-
-	const ee = requestAsEventEmitter(opts);
-
-	ee.on('request', req => {
-		proxy.emit('request', req);
-
-		if (isStream(opts.body)) {
-			opts.body.pipe(req);
-			return;
-		}
-
-		if (opts.body) {
-			req.end(opts.body);
-			return;
-		}
-
-		if (opts.method === 'POST' || opts.method === 'PUT' || opts.method === 'PATCH') {
-			input.pipe(req);
-			return;
-		}
-
-		req.end();
-	});
-
-	ee.on('response', res => {
-		const statusCode = res.statusCode;
-
-		res.pipe(output);
-
-		if (statusCode < 200 || statusCode > 299) {
-			proxy.emit('error', new got.HTTPError(statusCode, opts), null, res);
-			return;
-		}
-
-		proxy.emit('response', res);
-	});
-
-	ee.on('redirect', proxy.emit.bind(proxy, 'redirect'));
-	ee.on('error', proxy.emit.bind(proxy, 'error'));
-
-	return proxy;
-}
-
-function normalizeArguments(url, opts) {
-	if (typeof url !== 'string' && typeof url !== 'object') {
-		throw new Error(`Parameter \`url\` must be a string or object, not ${typeof url}`);
-	}
-
-	if (typeof url === 'string') {
-		url = url.replace(/^unix:/, 'http://$&');
-		url = urlParseLax(url);
-
-		if (url.auth) {
-			throw new Error('Basic authentication must be done with auth option');
-		}
-	}
-
-	opts = Object.assign(
-		{
-			protocol: 'http:',
-			path: '',
-			retries: 5
-		},
-		url,
-		opts
-	);
-
-	opts.headers = Object.assign({
-		'user-agent': `${pkg.name}/${pkg.version} (https://github.com/sindresorhus/got)`,
-		'accept-encoding': 'gzip,deflate'
-	}, lowercaseKeys(opts.headers));
-
-	const query = opts.query;
-
-	if (query) {
-		if (typeof query !== 'string') {
-			opts.query = querystring.stringify(query);
-		}
-
-		opts.path = `${opts.path.split('?')[0]}?${opts.query}`;
-		delete opts.query;
-	}
-
-	if (opts.json && opts.headers.accept === undefined) {
-		opts.headers.accept = 'application/json';
-	}
-
-	let body = opts.body;
-
-	if (body) {
-		if (typeof body !== 'string' && !(body !== null && typeof body === 'object')) {
-			throw new Error('options.body must be a ReadableStream, string, Buffer or plain Object');
-		}
-
-		opts.method = opts.method || 'POST';
-
-		if (isStream(body) && typeof body.getBoundary === 'function') {
-			// Special case for https://github.com/form-data/form-data
-			opts.headers['content-type'] = opts.headers['content-type'] || `multipart/form-data; boundary=${body.getBoundary()}`;
-		} else if (body !== null && typeof body === 'object' && !Buffer.isBuffer(body) && !isStream(body)) {
-			opts.headers['content-type'] = opts.headers['content-type'] || 'application/x-www-form-urlencoded';
-			body = opts.body = querystring.stringify(body);
-		}
-
-		if (opts.headers['content-length'] === undefined && opts.headers['transfer-encoding'] === undefined && !isStream(body)) {
-			const length = typeof body === 'string' ? Buffer.byteLength(body) : body.length;
-			opts.headers['content-length'] = length;
-		}
-	}
-
-	opts.method = (opts.method || 'GET').toUpperCase();
-
-	if (opts.hostname === 'unix') {
-		const matches = /(.+):(.+)/.exec(opts.path);
-
-		if (matches) {
-			opts.socketPath = matches[1];
-			opts.path = matches[2];
-			opts.host = null;
-		}
-	}
-
-	if (typeof opts.retries !== 'function') {
-		const retries = opts.retries;
-
-		opts.retries = (iter, err) => {
-			if (iter > retries || !isRetryAllowed(err)) {
-				return 0;
+					listeners[0].resolve(optimalSession);
+					return;
+				}
 			}
 
-			const noise = Math.random() * 100;
+			if (normalizedOptions in this.queue) {
+				if (normalizedOrigin in this.queue[normalizedOptions]) {
+					// There's already an item in the queue, just attach ourselves to it.
+					this.queue[normalizedOptions][normalizedOrigin].listeners.push(...listeners);
 
-			return ((1 << iter) * 1000) + noise;
+					// This shouldn't be executed here.
+					// See the comment inside _tryToCreateNewSession.
+					this._tryToCreateNewSession(normalizedOptions, normalizedOrigin);
+					return;
+				}
+			} else {
+				this.queue[normalizedOptions] = {};
+			}
+
+			// The entry must be removed from the queue IMMEDIATELY when:
+			// 1. the session connects successfully,
+			// 2. an error occurs.
+			const removeFromQueue = () => {
+				// Our entry can be replaced. We cannot remove the new one.
+				if (normalizedOptions in this.queue && this.queue[normalizedOptions][normalizedOrigin] === entry) {
+					delete this.queue[normalizedOptions][normalizedOrigin];
+
+					if (Object.keys(this.queue[normalizedOptions]).length === 0) {
+						delete this.queue[normalizedOptions];
+					}
+				}
+			};
+
+			// The main logic is here
+			const entry = () => {
+				const name = `${normalizedOrigin}:${normalizedOptions}`;
+				let receivedSettings = false;
+
+				try {
+					const session = http2.connect(origin, {
+						createConnection: this.createConnection,
+						settings: this.settings,
+						session: this.tlsSessionCache.get(name),
+						...options
+					});
+					session[kCurrentStreamsCount] = 0;
+					session[kGracefullyClosing] = false;
+
+					const isFree = () => session[kCurrentStreamsCount] < session.remoteSettings.maxConcurrentStreams;
+					let wasFree = true;
+
+					session.socket.once('session', tlsSession => {
+						this.tlsSessionCache.set(name, tlsSession);
+					});
+
+					session.once('error', error => {
+						// Listeners are empty when the session successfully connected.
+						for (const {reject} of listeners) {
+							reject(error);
+						}
+
+						// The connection got broken, purge the cache.
+						this.tlsSessionCache.delete(name);
+					});
+
+					session.setTimeout(this.timeout, () => {
+						// Terminates all streams owned by this session.
+						// TODO: Maybe the streams should have a "Session timed out" error?
+						session.destroy();
+					});
+
+					session.once('close', () => {
+						if (receivedSettings) {
+							// 1. If it wasn't free then no need to decrease because
+							//    it has been decreased already in session.request().
+							// 2. `stream.once('close')` won't increment the count
+							//    because the session is already closed.
+							if (wasFree) {
+								this._freeSessionsCount--;
+							}
+
+							this._sessionsCount--;
+
+							// This cannot be moved to the stream logic,
+							// because there may be a session that hadn't made a single request.
+							const where = this.sessions[normalizedOptions];
+							where.splice(where.indexOf(session), 1);
+
+							if (where.length === 0) {
+								delete this.sessions[normalizedOptions];
+							}
+						} else {
+							// Broken connection
+							const error = new Error('Session closed without receiving a SETTINGS frame');
+							error.code = 'HTTP2WRAPPER_NOSETTINGS';
+
+							for (const {reject} of listeners) {
+								reject(error);
+							}
+
+							removeFromQueue();
+						}
+
+						// There may be another session awaiting.
+						this._tryToCreateNewSession(normalizedOptions, normalizedOrigin);
+					});
+
+					// Iterates over the queue and processes listeners.
+					const processListeners = () => {
+						if (!(normalizedOptions in this.queue) || !isFree()) {
+							return;
+						}
+
+						for (const origin of session[kOriginSet]) {
+							if (origin in this.queue[normalizedOptions]) {
+								const {listeners} = this.queue[normalizedOptions][origin];
+
+								// Prevents session overloading.
+								while (listeners.length !== 0 && isFree()) {
+									// We assume `resolve(...)` calls `request(...)` *directly*,
+									// otherwise the session will get overloaded.
+									listeners.shift().resolve(session);
+								}
+
+								const where = this.queue[normalizedOptions];
+								if (where[origin].listeners.length === 0) {
+									delete where[origin];
+
+									if (Object.keys(where).length === 0) {
+										delete this.queue[normalizedOptions];
+										break;
+									}
+								}
+
+								// We're no longer free, no point in continuing.
+								if (!isFree()) {
+									break;
+								}
+							}
+						}
+					};
+
+					// The Origin Set cannot shrink. No need to check if it suddenly became covered by another one.
+					session.on('origin', () => {
+						session[kOriginSet] = session.originSet;
+
+						if (!isFree()) {
+							// The session is full.
+							return;
+						}
+
+						processListeners();
+
+						// Close covered sessions (if possible).
+						closeCoveredSessions(this.sessions[normalizedOptions], session);
+					});
+
+					session.once('remoteSettings', () => {
+						// Fix Node.js bug preventing the process from exiting
+						session.ref();
+						session.unref();
+
+						this._sessionsCount++;
+
+						// The Agent could have been destroyed already.
+						if (entry.destroyed) {
+							const error = new Error('Agent has been destroyed');
+
+							for (const listener of listeners) {
+								listener.reject(error);
+							}
+
+							session.destroy();
+							return;
+						}
+
+						session[kOriginSet] = session.originSet;
+
+						{
+							const where = this.sessions;
+
+							if (normalizedOptions in where) {
+								const sessions = where[normalizedOptions];
+								sessions.splice(getSortedIndex(sessions, session, compareSessions), 0, session);
+							} else {
+								where[normalizedOptions] = [session];
+							}
+						}
+
+						this._freeSessionsCount += 1;
+						receivedSettings = true;
+
+						this.emit('session', session);
+
+						processListeners();
+						removeFromQueue();
+
+						// TODO: Close last recently used (or least used?) session
+						if (session[kCurrentStreamsCount] === 0 && this._freeSessionsCount > this.maxFreeSessions) {
+							session.close();
+						}
+
+						// Check if we haven't managed to execute all listeners.
+						if (listeners.length !== 0) {
+							// Request for a new session with predefined listeners.
+							this.getSession(normalizedOrigin, options, listeners);
+							listeners.length = 0;
+						}
+
+						// `session.remoteSettings.maxConcurrentStreams` might get increased
+						session.on('remoteSettings', () => {
+							processListeners();
+
+							// In case the Origin Set changes
+							closeCoveredSessions(this.sessions[normalizedOptions], session);
+						});
+					});
+
+					// Shim `session.request()` in order to catch all streams
+					session[kRequest] = session.request;
+					session.request = (headers, streamOptions) => {
+						if (session[kGracefullyClosing]) {
+							throw new Error('The session is gracefully closing. No new streams are allowed.');
+						}
+
+						const stream = session[kRequest](headers, streamOptions);
+
+						// The process won't exit until the session is closed or all requests are gone.
+						session.ref();
+
+						++session[kCurrentStreamsCount];
+
+						if (session[kCurrentStreamsCount] === session.remoteSettings.maxConcurrentStreams) {
+							this._freeSessionsCount--;
+						}
+
+						stream.once('close', () => {
+							wasFree = isFree();
+
+							--session[kCurrentStreamsCount];
+
+							if (!session.destroyed && !session.closed) {
+								closeSessionIfCovered(this.sessions[normalizedOptions], session);
+
+								if (isFree() && !session.closed) {
+									if (!wasFree) {
+										this._freeSessionsCount++;
+
+										wasFree = true;
+									}
+
+									const isEmpty = session[kCurrentStreamsCount] === 0;
+
+									if (isEmpty) {
+										session.unref();
+									}
+
+									if (
+										isEmpty &&
+										(
+											this._freeSessionsCount > this.maxFreeSessions ||
+											session[kGracefullyClosing]
+										)
+									) {
+										session.close();
+									} else {
+										closeCoveredSessions(this.sessions[normalizedOptions], session);
+										processListeners();
+									}
+								}
+							}
+						});
+
+						return stream;
+					};
+				} catch (error) {
+					for (const listener of listeners) {
+						listener.reject(error);
+					}
+
+					removeFromQueue();
+				}
+			};
+
+			entry.listeners = listeners;
+			entry.completed = false;
+			entry.destroyed = false;
+
+			this.queue[normalizedOptions][normalizedOrigin] = entry;
+			this._tryToCreateNewSession(normalizedOptions, normalizedOrigin);
+		});
+	}
+
+	request(origin, options, headers, streamOptions) {
+		return new Promise((resolve, reject) => {
+			this.getSession(origin, options, [{
+				reject,
+				resolve: session => {
+					try {
+						resolve(session.request(headers, streamOptions));
+					} catch (error) {
+						reject(error);
+					}
+				}
+			}]);
+		});
+	}
+
+	createConnection(origin, options) {
+		return Agent.connect(origin, options);
+	}
+
+	static connect(origin, options) {
+		options.ALPNProtocols = ['h2'];
+
+		const port = origin.port || 443;
+		const host = origin.hostname || origin.host;
+
+		if (typeof options.servername === 'undefined') {
+			options.servername = host;
+		}
+
+		return tls.connect(port, host, options);
+	}
+
+	closeFreeSessions() {
+		for (const sessions of Object.values(this.sessions)) {
+			for (const session of sessions) {
+				if (session[kCurrentStreamsCount] === 0) {
+					session.close();
+				}
+			}
+		}
+	}
+
+	destroy(reason) {
+		for (const sessions of Object.values(this.sessions)) {
+			for (const session of sessions) {
+				session.destroy(reason);
+			}
+		}
+
+		for (const entriesOfAuthority of Object.values(this.queue)) {
+			for (const entry of Object.values(entriesOfAuthority)) {
+				entry.destroyed = true;
+			}
+		}
+
+		// New requests should NOT attach to destroyed sessions
+		this.queue = {};
+	}
+
+	get freeSessions() {
+		return getSessions({agent: this, isFree: true});
+	}
+
+	get busySessions() {
+		return getSessions({agent: this, isFree: false});
+	}
+}
+
+Agent.kCurrentStreamsCount = kCurrentStreamsCount;
+Agent.kGracefullyClosing = kGracefullyClosing;
+
+module.exports = {
+	Agent,
+	globalAgent: new Agent()
+};
+
+
+/***/ }),
+
+/***/ 7167:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const http = __nccwpck_require__(8605);
+const https = __nccwpck_require__(7211);
+const resolveALPN = __nccwpck_require__(6624);
+const QuickLRU = __nccwpck_require__(9273);
+const Http2ClientRequest = __nccwpck_require__(9632);
+const calculateServerName = __nccwpck_require__(1982);
+const urlToOptions = __nccwpck_require__(2686);
+
+const cache = new QuickLRU({maxSize: 100});
+const queue = new Map();
+
+const installSocket = (agent, socket, options) => {
+	socket._httpMessage = {shouldKeepAlive: true};
+
+	const onFree = () => {
+		agent.emit('free', socket, options);
+	};
+
+	socket.on('free', onFree);
+
+	const onClose = () => {
+		agent.removeSocket(socket, options);
+	};
+
+	socket.on('close', onClose);
+
+	const onRemove = () => {
+		agent.removeSocket(socket, options);
+		socket.off('close', onClose);
+		socket.off('free', onFree);
+		socket.off('agentRemove', onRemove);
+	};
+
+	socket.on('agentRemove', onRemove);
+
+	agent.emit('free', socket, options);
+};
+
+const resolveProtocol = async options => {
+	const name = `${options.host}:${options.port}:${options.ALPNProtocols.sort()}`;
+
+	if (!cache.has(name)) {
+		if (queue.has(name)) {
+			const result = await queue.get(name);
+			return result.alpnProtocol;
+		}
+
+		const {path, agent} = options;
+		options.path = options.socketPath;
+
+		const resultPromise = resolveALPN(options);
+		queue.set(name, resultPromise);
+
+		try {
+			const {socket, alpnProtocol} = await resultPromise;
+			cache.set(name, alpnProtocol);
+
+			options.path = path;
+
+			if (alpnProtocol === 'h2') {
+				// https://github.com/nodejs/node/issues/33343
+				socket.destroy();
+			} else {
+				const {globalAgent} = https;
+				const defaultCreateConnection = https.Agent.prototype.createConnection;
+
+				if (agent) {
+					if (agent.createConnection === defaultCreateConnection) {
+						installSocket(agent, socket, options);
+					} else {
+						socket.destroy();
+					}
+				} else if (globalAgent.createConnection === defaultCreateConnection) {
+					installSocket(globalAgent, socket, options);
+				} else {
+					socket.destroy();
+				}
+			}
+
+			queue.delete(name);
+
+			return alpnProtocol;
+		} catch (error) {
+			queue.delete(name);
+
+			throw error;
+		}
+	}
+
+	return cache.get(name);
+};
+
+module.exports = async (input, options, callback) => {
+	if (typeof input === 'string' || input instanceof URL) {
+		input = urlToOptions(new URL(input));
+	}
+
+	if (typeof options === 'function') {
+		callback = options;
+		options = undefined;
+	}
+
+	options = {
+		ALPNProtocols: ['h2', 'http/1.1'],
+		...input,
+		...options,
+		resolveSocket: true
+	};
+
+	if (!Array.isArray(options.ALPNProtocols) || options.ALPNProtocols.length === 0) {
+		throw new Error('The `ALPNProtocols` option must be an Array with at least one entry');
+	}
+
+	options.protocol = options.protocol || 'https:';
+	const isHttps = options.protocol === 'https:';
+
+	options.host = options.hostname || options.host || 'localhost';
+	options.session = options.tlsSession;
+	options.servername = options.servername || calculateServerName(options);
+	options.port = options.port || (isHttps ? 443 : 80);
+	options._defaultAgent = isHttps ? https.globalAgent : http.globalAgent;
+
+	const agents = options.agent;
+
+	if (agents) {
+		if (agents.addRequest) {
+			throw new Error('The `options.agent` object can contain only `http`, `https` or `http2` properties');
+		}
+
+		options.agent = agents[isHttps ? 'https' : 'http'];
+	}
+
+	if (isHttps) {
+		const protocol = await resolveProtocol(options);
+
+		if (protocol === 'h2') {
+			if (agents) {
+				options.agent = agents.http2;
+			}
+
+			return new Http2ClientRequest(options, callback);
+		}
+	}
+
+	return http.request(options, callback);
+};
+
+module.exports.protocolCache = cache;
+
+
+/***/ }),
+
+/***/ 9632:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const http2 = __nccwpck_require__(7565);
+const {Writable} = __nccwpck_require__(2413);
+const {Agent, globalAgent} = __nccwpck_require__(9898);
+const IncomingMessage = __nccwpck_require__(2575);
+const urlToOptions = __nccwpck_require__(2686);
+const proxyEvents = __nccwpck_require__(1818);
+const isRequestPseudoHeader = __nccwpck_require__(1199);
+const {
+	ERR_INVALID_ARG_TYPE,
+	ERR_INVALID_PROTOCOL,
+	ERR_HTTP_HEADERS_SENT,
+	ERR_INVALID_HTTP_TOKEN,
+	ERR_HTTP_INVALID_HEADER_VALUE,
+	ERR_INVALID_CHAR
+} = __nccwpck_require__(7087);
+
+const {
+	HTTP2_HEADER_STATUS,
+	HTTP2_HEADER_METHOD,
+	HTTP2_HEADER_PATH,
+	HTTP2_METHOD_CONNECT
+} = http2.constants;
+
+const kHeaders = Symbol('headers');
+const kOrigin = Symbol('origin');
+const kSession = Symbol('session');
+const kOptions = Symbol('options');
+const kFlushedHeaders = Symbol('flushedHeaders');
+const kJobs = Symbol('jobs');
+
+const isValidHttpToken = /^[\^`\-\w!#$%&*+.|~]+$/;
+const isInvalidHeaderValue = /[^\t\u0020-\u007E\u0080-\u00FF]/;
+
+class ClientRequest extends Writable {
+	constructor(input, options, callback) {
+		super({
+			autoDestroy: false
+		});
+
+		const hasInput = typeof input === 'string' || input instanceof URL;
+		if (hasInput) {
+			input = urlToOptions(input instanceof URL ? input : new URL(input));
+		}
+
+		if (typeof options === 'function' || options === undefined) {
+			// (options, callback)
+			callback = options;
+			options = hasInput ? input : {...input};
+		} else {
+			// (input, options, callback)
+			options = {...input, ...options};
+		}
+
+		if (options.h2session) {
+			this[kSession] = options.h2session;
+		} else if (options.agent === false) {
+			this.agent = new Agent({maxFreeSessions: 0});
+		} else if (typeof options.agent === 'undefined' || options.agent === null) {
+			if (typeof options.createConnection === 'function') {
+				// This is a workaround - we don't have to create the session on our own.
+				this.agent = new Agent({maxFreeSessions: 0});
+				this.agent.createConnection = options.createConnection;
+			} else {
+				this.agent = globalAgent;
+			}
+		} else if (typeof options.agent.request === 'function') {
+			this.agent = options.agent;
+		} else {
+			throw new ERR_INVALID_ARG_TYPE('options.agent', ['Agent-like Object', 'undefined', 'false'], options.agent);
+		}
+
+		if (options.protocol && options.protocol !== 'https:') {
+			throw new ERR_INVALID_PROTOCOL(options.protocol, 'https:');
+		}
+
+		const port = options.port || options.defaultPort || (this.agent && this.agent.defaultPort) || 443;
+		const host = options.hostname || options.host || 'localhost';
+
+		// Don't enforce the origin via options. It may be changed in an Agent.
+		delete options.hostname;
+		delete options.host;
+		delete options.port;
+
+		const {timeout} = options;
+		options.timeout = undefined;
+
+		this[kHeaders] = Object.create(null);
+		this[kJobs] = [];
+
+		this.socket = null;
+		this.connection = null;
+
+		this.method = options.method || 'GET';
+		this.path = options.path;
+
+		this.res = null;
+		this.aborted = false;
+		this.reusedSocket = false;
+
+		if (options.headers) {
+			for (const [header, value] of Object.entries(options.headers)) {
+				this.setHeader(header, value);
+			}
+		}
+
+		if (options.auth && !('authorization' in this[kHeaders])) {
+			this[kHeaders].authorization = 'Basic ' + Buffer.from(options.auth).toString('base64');
+		}
+
+		options.session = options.tlsSession;
+		options.path = options.socketPath;
+
+		this[kOptions] = options;
+
+		// Clients that generate HTTP/2 requests directly SHOULD use the :authority pseudo-header field instead of the Host header field.
+		if (port === 443) {
+			this[kOrigin] = `https://${host}`;
+
+			if (!(':authority' in this[kHeaders])) {
+				this[kHeaders][':authority'] = host;
+			}
+		} else {
+			this[kOrigin] = `https://${host}:${port}`;
+
+			if (!(':authority' in this[kHeaders])) {
+				this[kHeaders][':authority'] = `${host}:${port}`;
+			}
+		}
+
+		if (timeout) {
+			this.setTimeout(timeout);
+		}
+
+		if (callback) {
+			this.once('response', callback);
+		}
+
+		this[kFlushedHeaders] = false;
+	}
+
+	get method() {
+		return this[kHeaders][HTTP2_HEADER_METHOD];
+	}
+
+	set method(value) {
+		if (value) {
+			this[kHeaders][HTTP2_HEADER_METHOD] = value.toUpperCase();
+		}
+	}
+
+	get path() {
+		return this[kHeaders][HTTP2_HEADER_PATH];
+	}
+
+	set path(value) {
+		if (value) {
+			this[kHeaders][HTTP2_HEADER_PATH] = value;
+		}
+	}
+
+	get _mustNotHaveABody() {
+		return this.method === 'GET' || this.method === 'HEAD' || this.method === 'DELETE';
+	}
+
+	_write(chunk, encoding, callback) {
+		// https://github.com/nodejs/node/blob/654df09ae0c5e17d1b52a900a545f0664d8c7627/lib/internal/http2/util.js#L148-L156
+		if (this._mustNotHaveABody) {
+			callback(new Error('The GET, HEAD and DELETE methods must NOT have a body'));
+			/* istanbul ignore next: Node.js 12 throws directly */
+			return;
+		}
+
+		this.flushHeaders();
+
+		const callWrite = () => this._request.write(chunk, encoding, callback);
+		if (this._request) {
+			callWrite();
+		} else {
+			this[kJobs].push(callWrite);
+		}
+	}
+
+	_final(callback) {
+		if (this.destroyed) {
+			return;
+		}
+
+		this.flushHeaders();
+
+		const callEnd = () => {
+			// For GET, HEAD and DELETE
+			if (this._mustNotHaveABody) {
+				callback();
+				return;
+			}
+
+			this._request.end(callback);
 		};
+
+		if (this._request) {
+			callEnd();
+		} else {
+			this[kJobs].push(callEnd);
+		}
 	}
 
-	if (opts.followRedirect === undefined) {
-		opts.followRedirect = true;
+	abort() {
+		if (this.res && this.res.complete) {
+			return;
+		}
+
+		if (!this.aborted) {
+			process.nextTick(() => this.emit('abort'));
+		}
+
+		this.aborted = true;
+
+		this.destroy();
 	}
 
-	if (opts.timeout) {
-		opts.gotTimeout = opts.timeout;
-		delete opts.timeout;
+	_destroy(error, callback) {
+		if (this.res) {
+			this.res._dump();
+		}
+
+		if (this._request) {
+			this._request.destroy();
+		}
+
+		callback(error);
 	}
 
-	return opts;
+	async flushHeaders() {
+		if (this[kFlushedHeaders] || this.destroyed) {
+			return;
+		}
+
+		this[kFlushedHeaders] = true;
+
+		const isConnectMethod = this.method === HTTP2_METHOD_CONNECT;
+
+		// The real magic is here
+		const onStream = stream => {
+			this._request = stream;
+
+			if (this.destroyed) {
+				stream.destroy();
+				return;
+			}
+
+			// Forwards `timeout`, `continue`, `close` and `error` events to this instance.
+			if (!isConnectMethod) {
+				proxyEvents(stream, this, ['timeout', 'continue', 'close', 'error']);
+			}
+
+			// Wait for the `finish` event. We don't want to emit the `response` event
+			// before `request.end()` is called.
+			const waitForEnd = fn => {
+				return (...args) => {
+					if (!this.writable && !this.destroyed) {
+						fn(...args);
+					} else {
+						this.once('finish', () => {
+							fn(...args);
+						});
+					}
+				};
+			};
+
+			// This event tells we are ready to listen for the data.
+			stream.once('response', waitForEnd((headers, flags, rawHeaders) => {
+				// If we were to emit raw request stream, it would be as fast as the native approach.
+				// Note that wrapping the raw stream in a Proxy instance won't improve the performance (already tested it).
+				const response = new IncomingMessage(this.socket, stream.readableHighWaterMark);
+				this.res = response;
+
+				response.req = this;
+				response.statusCode = headers[HTTP2_HEADER_STATUS];
+				response.headers = headers;
+				response.rawHeaders = rawHeaders;
+
+				response.once('end', () => {
+					if (this.aborted) {
+						response.aborted = true;
+						response.emit('aborted');
+					} else {
+						response.complete = true;
+
+						// Has no effect, just be consistent with the Node.js behavior
+						response.socket = null;
+						response.connection = null;
+					}
+				});
+
+				if (isConnectMethod) {
+					response.upgrade = true;
+
+					// The HTTP1 API says the socket is detached here,
+					// but we can't do that so we pass the original HTTP2 request.
+					if (this.emit('connect', response, stream, Buffer.alloc(0))) {
+						this.emit('close');
+					} else {
+						// No listeners attached, destroy the original request.
+						stream.destroy();
+					}
+				} else {
+					// Forwards data
+					stream.on('data', chunk => {
+						if (!response._dumped && !response.push(chunk)) {
+							stream.pause();
+						}
+					});
+
+					stream.once('end', () => {
+						response.push(null);
+					});
+
+					if (!this.emit('response', response)) {
+						// No listeners attached, dump the response.
+						response._dump();
+					}
+				}
+			}));
+
+			// Emits `information` event
+			stream.once('headers', waitForEnd(
+				headers => this.emit('information', {statusCode: headers[HTTP2_HEADER_STATUS]})
+			));
+
+			stream.once('trailers', waitForEnd((trailers, flags, rawTrailers) => {
+				const {res} = this;
+
+				// Assigns trailers to the response object.
+				res.trailers = trailers;
+				res.rawTrailers = rawTrailers;
+			}));
+
+			const {socket} = stream.session;
+			this.socket = socket;
+			this.connection = socket;
+
+			for (const job of this[kJobs]) {
+				job();
+			}
+
+			this.emit('socket', this.socket);
+		};
+
+		// Makes a HTTP2 request
+		if (this[kSession]) {
+			try {
+				onStream(this[kSession].request(this[kHeaders]));
+			} catch (error) {
+				this.emit('error', error);
+			}
+		} else {
+			this.reusedSocket = true;
+
+			try {
+				onStream(await this.agent.request(this[kOrigin], this[kOptions], this[kHeaders]));
+			} catch (error) {
+				this.emit('error', error);
+			}
+		}
+	}
+
+	getHeader(name) {
+		if (typeof name !== 'string') {
+			throw new ERR_INVALID_ARG_TYPE('name', 'string', name);
+		}
+
+		return this[kHeaders][name.toLowerCase()];
+	}
+
+	get headersSent() {
+		return this[kFlushedHeaders];
+	}
+
+	removeHeader(name) {
+		if (typeof name !== 'string') {
+			throw new ERR_INVALID_ARG_TYPE('name', 'string', name);
+		}
+
+		if (this.headersSent) {
+			throw new ERR_HTTP_HEADERS_SENT('remove');
+		}
+
+		delete this[kHeaders][name.toLowerCase()];
+	}
+
+	setHeader(name, value) {
+		if (this.headersSent) {
+			throw new ERR_HTTP_HEADERS_SENT('set');
+		}
+
+		if (typeof name !== 'string' || (!isValidHttpToken.test(name) && !isRequestPseudoHeader(name))) {
+			throw new ERR_INVALID_HTTP_TOKEN('Header name', name);
+		}
+
+		if (typeof value === 'undefined') {
+			throw new ERR_HTTP_INVALID_HEADER_VALUE(value, name);
+		}
+
+		if (isInvalidHeaderValue.test(value)) {
+			throw new ERR_INVALID_CHAR('header content', name);
+		}
+
+		this[kHeaders][name.toLowerCase()] = value;
+	}
+
+	setNoDelay() {
+		// HTTP2 sockets cannot be malformed, do nothing.
+	}
+
+	setSocketKeepAlive() {
+		// HTTP2 sockets cannot be malformed, do nothing.
+	}
+
+	setTimeout(ms, callback) {
+		const applyTimeout = () => this._request.setTimeout(ms, callback);
+
+		if (this._request) {
+			applyTimeout();
+		} else {
+			this[kJobs].push(applyTimeout);
+		}
+
+		return this;
+	}
+
+	get maxHeadersCount() {
+		if (!this.destroyed && this._request) {
+			return this._request.session.localSettings.maxHeaderListSize;
+		}
+
+		return undefined;
+	}
+
+	set maxHeadersCount(_value) {
+		// Updating HTTP2 settings would affect all requests, do nothing.
+	}
 }
 
-function got(url, opts) {
-	try {
-		return asPromise(normalizeArguments(url, opts));
-	} catch (err) {
-		return Promise.reject(err);
-	}
-}
-
-const helpers = [
-	'get',
-	'post',
-	'put',
-	'patch',
-	'head',
-	'delete'
-];
-
-helpers.forEach(el => {
-	got[el] = (url, opts) => got(url, Object.assign({}, opts, {method: el}));
-});
-
-got.stream = (url, opts) => asStream(normalizeArguments(url, opts));
-
-for (const el of helpers) {
-	got.stream[el] = (url, opts) => got.stream(url, Object.assign({}, opts, {method: el}));
-}
-
-function stdError(error, opts) {
-	if (error.code !== undefined) {
-		this.code = error.code;
-	}
-
-	Object.assign(this, {
-		message: error.message,
-		host: opts.host,
-		hostname: opts.hostname,
-		method: opts.method,
-		path: opts.path
-	});
-}
-
-got.RequestError = createErrorClass('RequestError', stdError);
-got.ReadError = createErrorClass('ReadError', stdError);
-got.ParseError = createErrorClass('ParseError', function (e, statusCode, opts, data) {
-	stdError.call(this, e, opts);
-	this.statusCode = statusCode;
-	this.statusMessage = http.STATUS_CODES[this.statusCode];
-	this.message = `${e.message} in "${urlLib.format(opts)}": \n${data.slice(0, 77)}...`;
-});
-
-got.HTTPError = createErrorClass('HTTPError', function (statusCode, opts) {
-	stdError.call(this, {}, opts);
-	this.statusCode = statusCode;
-	this.statusMessage = http.STATUS_CODES[this.statusCode];
-	this.message = `Response code ${this.statusCode} (${this.statusMessage})`;
-});
-
-got.MaxRedirectsError = createErrorClass('MaxRedirectsError', function (statusCode, opts) {
-	stdError.call(this, {}, opts);
-	this.statusCode = statusCode;
-	this.statusMessage = http.STATUS_CODES[this.statusCode];
-	this.message = 'Redirected 10 times. Aborting.';
-});
-
-module.exports = got;
+module.exports = ClientRequest;
 
 
 /***/ }),
 
-/***/ 7356:
-/***/ ((module) => {
-
-"use strict";
-
-
-module.exports = clone
-
-var getPrototypeOf = Object.getPrototypeOf || function (obj) {
-  return obj.__proto__
-}
-
-function clone (obj) {
-  if (obj === null || typeof obj !== 'object')
-    return obj
-
-  if (obj instanceof Object)
-    var copy = { __proto__: getPrototypeOf(obj) }
-  else
-    var copy = Object.create(null)
-
-  Object.getOwnPropertyNames(obj).forEach(function (key) {
-    Object.defineProperty(copy, key, Object.getOwnPropertyDescriptor(obj, key))
-  })
-
-  return copy
-}
-
-
-/***/ }),
-
-/***/ 7758:
+/***/ 2575:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var fs = __nccwpck_require__(5747)
-var polyfills = __nccwpck_require__(263)
-var legacy = __nccwpck_require__(3086)
-var clone = __nccwpck_require__(7356)
+"use strict";
 
-var util = __nccwpck_require__(1669)
+const {Readable} = __nccwpck_require__(2413);
 
-/* istanbul ignore next - node 0.x polyfill */
-var gracefulQueue
-var previousSymbol
+class IncomingMessage extends Readable {
+	constructor(socket, highWaterMark) {
+		super({
+			highWaterMark,
+			autoDestroy: false
+		});
 
-/* istanbul ignore else - node 0.x polyfill */
-if (typeof Symbol === 'function' && typeof Symbol.for === 'function') {
-  gracefulQueue = Symbol.for('graceful-fs.queue')
-  // This is used in testing by future versions
-  previousSymbol = Symbol.for('graceful-fs.previous')
-} else {
-  gracefulQueue = '___graceful-fs.queue'
-  previousSymbol = '___graceful-fs.previous'
+		this.statusCode = null;
+		this.statusMessage = '';
+		this.httpVersion = '2.0';
+		this.httpVersionMajor = 2;
+		this.httpVersionMinor = 0;
+		this.headers = {};
+		this.trailers = {};
+		this.req = null;
+
+		this.aborted = false;
+		this.complete = false;
+		this.upgrade = null;
+
+		this.rawHeaders = [];
+		this.rawTrailers = [];
+
+		this.socket = socket;
+		this.connection = socket;
+
+		this._dumped = false;
+	}
+
+	_destroy(error) {
+		this.req._request.destroy(error);
+	}
+
+	setTimeout(ms, callback) {
+		this.req.setTimeout(ms, callback);
+		return this;
+	}
+
+	_dump() {
+		if (!this._dumped) {
+			this._dumped = true;
+
+			this.removeAllListeners('data');
+			this.resume();
+		}
+	}
+
+	_read() {
+		if (this.req) {
+			this.req._request.resume();
+		}
+	}
 }
 
-function noop () {}
-
-function publishQueue(context, queue) {
-  Object.defineProperty(context, gracefulQueue, {
-    get: function() {
-      return queue
-    }
-  })
-}
-
-var debug = noop
-if (util.debuglog)
-  debug = util.debuglog('gfs4')
-else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || ''))
-  debug = function() {
-    var m = util.format.apply(util, arguments)
-    m = 'GFS4: ' + m.split(/\n/).join('\nGFS4: ')
-    console.error(m)
-  }
-
-// Once time initialization
-if (!fs[gracefulQueue]) {
-  // This queue can be shared by multiple loaded instances
-  var queue = global[gracefulQueue] || []
-  publishQueue(fs, queue)
-
-  // Patch fs.close/closeSync to shared queue version, because we need
-  // to retry() whenever a close happens *anywhere* in the program.
-  // This is essential when multiple graceful-fs instances are
-  // in play at the same time.
-  fs.close = (function (fs$close) {
-    function close (fd, cb) {
-      return fs$close.call(fs, fd, function (err) {
-        // This function uses the graceful-fs shared queue
-        if (!err) {
-          retry()
-        }
-
-        if (typeof cb === 'function')
-          cb.apply(this, arguments)
-      })
-    }
-
-    Object.defineProperty(close, previousSymbol, {
-      value: fs$close
-    })
-    return close
-  })(fs.close)
-
-  fs.closeSync = (function (fs$closeSync) {
-    function closeSync (fd) {
-      // This function uses the graceful-fs shared queue
-      fs$closeSync.apply(fs, arguments)
-      retry()
-    }
-
-    Object.defineProperty(closeSync, previousSymbol, {
-      value: fs$closeSync
-    })
-    return closeSync
-  })(fs.closeSync)
-
-  if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || '')) {
-    process.on('exit', function() {
-      debug(fs[gracefulQueue])
-      __nccwpck_require__(2357).equal(fs[gracefulQueue].length, 0)
-    })
-  }
-}
-
-if (!global[gracefulQueue]) {
-  publishQueue(global, fs[gracefulQueue]);
-}
-
-module.exports = patch(clone(fs))
-if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs.__patched) {
-    module.exports = patch(fs)
-    fs.__patched = true;
-}
-
-function patch (fs) {
-  // Everything that references the open() function needs to be in here
-  polyfills(fs)
-  fs.gracefulify = patch
-
-  fs.createReadStream = createReadStream
-  fs.createWriteStream = createWriteStream
-  var fs$readFile = fs.readFile
-  fs.readFile = readFile
-  function readFile (path, options, cb) {
-    if (typeof options === 'function')
-      cb = options, options = null
-
-    return go$readFile(path, options, cb)
-
-    function go$readFile (path, options, cb) {
-      return fs$readFile(path, options, function (err) {
-        if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-          enqueue([go$readFile, [path, options, cb]])
-        else {
-          if (typeof cb === 'function')
-            cb.apply(this, arguments)
-          retry()
-        }
-      })
-    }
-  }
-
-  var fs$writeFile = fs.writeFile
-  fs.writeFile = writeFile
-  function writeFile (path, data, options, cb) {
-    if (typeof options === 'function')
-      cb = options, options = null
-
-    return go$writeFile(path, data, options, cb)
-
-    function go$writeFile (path, data, options, cb) {
-      return fs$writeFile(path, data, options, function (err) {
-        if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-          enqueue([go$writeFile, [path, data, options, cb]])
-        else {
-          if (typeof cb === 'function')
-            cb.apply(this, arguments)
-          retry()
-        }
-      })
-    }
-  }
-
-  var fs$appendFile = fs.appendFile
-  if (fs$appendFile)
-    fs.appendFile = appendFile
-  function appendFile (path, data, options, cb) {
-    if (typeof options === 'function')
-      cb = options, options = null
-
-    return go$appendFile(path, data, options, cb)
-
-    function go$appendFile (path, data, options, cb) {
-      return fs$appendFile(path, data, options, function (err) {
-        if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-          enqueue([go$appendFile, [path, data, options, cb]])
-        else {
-          if (typeof cb === 'function')
-            cb.apply(this, arguments)
-          retry()
-        }
-      })
-    }
-  }
-
-  var fs$copyFile = fs.copyFile
-  if (fs$copyFile)
-    fs.copyFile = copyFile
-  function copyFile (src, dest, flags, cb) {
-    if (typeof flags === 'function') {
-      cb = flags
-      flags = 0
-    }
-    return fs$copyFile(src, dest, flags, function (err) {
-      if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-        enqueue([fs$copyFile, [src, dest, flags, cb]])
-      else {
-        if (typeof cb === 'function')
-          cb.apply(this, arguments)
-        retry()
-      }
-    })
-  }
-
-  var fs$readdir = fs.readdir
-  fs.readdir = readdir
-  function readdir (path, options, cb) {
-    var args = [path]
-    if (typeof options !== 'function') {
-      args.push(options)
-    } else {
-      cb = options
-    }
-    args.push(go$readdir$cb)
-
-    return go$readdir(args)
-
-    function go$readdir$cb (err, files) {
-      if (files && files.sort)
-        files.sort()
-
-      if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-        enqueue([go$readdir, [args]])
-
-      else {
-        if (typeof cb === 'function')
-          cb.apply(this, arguments)
-        retry()
-      }
-    }
-  }
-
-  function go$readdir (args) {
-    return fs$readdir.apply(fs, args)
-  }
-
-  if (process.version.substr(0, 4) === 'v0.8') {
-    var legStreams = legacy(fs)
-    ReadStream = legStreams.ReadStream
-    WriteStream = legStreams.WriteStream
-  }
-
-  var fs$ReadStream = fs.ReadStream
-  if (fs$ReadStream) {
-    ReadStream.prototype = Object.create(fs$ReadStream.prototype)
-    ReadStream.prototype.open = ReadStream$open
-  }
-
-  var fs$WriteStream = fs.WriteStream
-  if (fs$WriteStream) {
-    WriteStream.prototype = Object.create(fs$WriteStream.prototype)
-    WriteStream.prototype.open = WriteStream$open
-  }
-
-  Object.defineProperty(fs, 'ReadStream', {
-    get: function () {
-      return ReadStream
-    },
-    set: function (val) {
-      ReadStream = val
-    },
-    enumerable: true,
-    configurable: true
-  })
-  Object.defineProperty(fs, 'WriteStream', {
-    get: function () {
-      return WriteStream
-    },
-    set: function (val) {
-      WriteStream = val
-    },
-    enumerable: true,
-    configurable: true
-  })
-
-  // legacy names
-  var FileReadStream = ReadStream
-  Object.defineProperty(fs, 'FileReadStream', {
-    get: function () {
-      return FileReadStream
-    },
-    set: function (val) {
-      FileReadStream = val
-    },
-    enumerable: true,
-    configurable: true
-  })
-  var FileWriteStream = WriteStream
-  Object.defineProperty(fs, 'FileWriteStream', {
-    get: function () {
-      return FileWriteStream
-    },
-    set: function (val) {
-      FileWriteStream = val
-    },
-    enumerable: true,
-    configurable: true
-  })
-
-  function ReadStream (path, options) {
-    if (this instanceof ReadStream)
-      return fs$ReadStream.apply(this, arguments), this
-    else
-      return ReadStream.apply(Object.create(ReadStream.prototype), arguments)
-  }
-
-  function ReadStream$open () {
-    var that = this
-    open(that.path, that.flags, that.mode, function (err, fd) {
-      if (err) {
-        if (that.autoClose)
-          that.destroy()
-
-        that.emit('error', err)
-      } else {
-        that.fd = fd
-        that.emit('open', fd)
-        that.read()
-      }
-    })
-  }
-
-  function WriteStream (path, options) {
-    if (this instanceof WriteStream)
-      return fs$WriteStream.apply(this, arguments), this
-    else
-      return WriteStream.apply(Object.create(WriteStream.prototype), arguments)
-  }
-
-  function WriteStream$open () {
-    var that = this
-    open(that.path, that.flags, that.mode, function (err, fd) {
-      if (err) {
-        that.destroy()
-        that.emit('error', err)
-      } else {
-        that.fd = fd
-        that.emit('open', fd)
-      }
-    })
-  }
-
-  function createReadStream (path, options) {
-    return new fs.ReadStream(path, options)
-  }
-
-  function createWriteStream (path, options) {
-    return new fs.WriteStream(path, options)
-  }
-
-  var fs$open = fs.open
-  fs.open = open
-  function open (path, flags, mode, cb) {
-    if (typeof mode === 'function')
-      cb = mode, mode = null
-
-    return go$open(path, flags, mode, cb)
-
-    function go$open (path, flags, mode, cb) {
-      return fs$open(path, flags, mode, function (err, fd) {
-        if (err && (err.code === 'EMFILE' || err.code === 'ENFILE'))
-          enqueue([go$open, [path, flags, mode, cb]])
-        else {
-          if (typeof cb === 'function')
-            cb.apply(this, arguments)
-          retry()
-        }
-      })
-    }
-  }
-
-  return fs
-}
-
-function enqueue (elem) {
-  debug('ENQUEUE', elem[0].name, elem[1])
-  fs[gracefulQueue].push(elem)
-}
-
-function retry () {
-  var elem = fs[gracefulQueue].shift()
-  if (elem) {
-    debug('RETRY', elem[0].name, elem[1])
-    elem[0].apply(null, elem[1])
-  }
-}
+module.exports = IncomingMessage;
 
 
 /***/ }),
 
-/***/ 3086:
+/***/ 4645:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Stream = __nccwpck_require__(2413).Stream
+"use strict";
 
-module.exports = legacy
+const http2 = __nccwpck_require__(7565);
+const agent = __nccwpck_require__(9898);
+const ClientRequest = __nccwpck_require__(9632);
+const IncomingMessage = __nccwpck_require__(2575);
+const auto = __nccwpck_require__(7167);
 
-function legacy (fs) {
-  return {
-    ReadStream: ReadStream,
-    WriteStream: WriteStream
-  }
+const request = (url, options, callback) => {
+	return new ClientRequest(url, options, callback);
+};
 
-  function ReadStream (path, options) {
-    if (!(this instanceof ReadStream)) return new ReadStream(path, options);
+const get = (url, options, callback) => {
+	// eslint-disable-next-line unicorn/prevent-abbreviations
+	const req = new ClientRequest(url, options, callback);
+	req.end();
 
-    Stream.call(this);
+	return req;
+};
 
-    var self = this;
-
-    this.path = path;
-    this.fd = null;
-    this.readable = true;
-    this.paused = false;
-
-    this.flags = 'r';
-    this.mode = 438; /*=0666*/
-    this.bufferSize = 64 * 1024;
-
-    options = options || {};
-
-    // Mixin options into this
-    var keys = Object.keys(options);
-    for (var index = 0, length = keys.length; index < length; index++) {
-      var key = keys[index];
-      this[key] = options[key];
-    }
-
-    if (this.encoding) this.setEncoding(this.encoding);
-
-    if (this.start !== undefined) {
-      if ('number' !== typeof this.start) {
-        throw TypeError('start must be a Number');
-      }
-      if (this.end === undefined) {
-        this.end = Infinity;
-      } else if ('number' !== typeof this.end) {
-        throw TypeError('end must be a Number');
-      }
-
-      if (this.start > this.end) {
-        throw new Error('start must be <= end');
-      }
-
-      this.pos = this.start;
-    }
-
-    if (this.fd !== null) {
-      process.nextTick(function() {
-        self._read();
-      });
-      return;
-    }
-
-    fs.open(this.path, this.flags, this.mode, function (err, fd) {
-      if (err) {
-        self.emit('error', err);
-        self.readable = false;
-        return;
-      }
-
-      self.fd = fd;
-      self.emit('open', fd);
-      self._read();
-    })
-  }
-
-  function WriteStream (path, options) {
-    if (!(this instanceof WriteStream)) return new WriteStream(path, options);
-
-    Stream.call(this);
-
-    this.path = path;
-    this.fd = null;
-    this.writable = true;
-
-    this.flags = 'w';
-    this.encoding = 'binary';
-    this.mode = 438; /*=0666*/
-    this.bytesWritten = 0;
-
-    options = options || {};
-
-    // Mixin options into this
-    var keys = Object.keys(options);
-    for (var index = 0, length = keys.length; index < length; index++) {
-      var key = keys[index];
-      this[key] = options[key];
-    }
-
-    if (this.start !== undefined) {
-      if ('number' !== typeof this.start) {
-        throw TypeError('start must be a Number');
-      }
-      if (this.start < 0) {
-        throw new Error('start must be >= zero');
-      }
-
-      this.pos = this.start;
-    }
-
-    this.busy = false;
-    this._queue = [];
-
-    if (this.fd === null) {
-      this._open = fs.open;
-      this._queue.push([this._open, this.path, this.flags, this.mode, undefined]);
-      this.flush();
-    }
-  }
-}
+module.exports = {
+	...http2,
+	ClientRequest,
+	IncomingMessage,
+	...agent,
+	request,
+	get,
+	auto
+};
 
 
 /***/ }),
 
-/***/ 263:
+/***/ 1982:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var constants = __nccwpck_require__(7619)
+"use strict";
 
-var origCwd = process.cwd
-var cwd = null
+const net = __nccwpck_require__(1631);
+/* istanbul ignore file: https://github.com/nodejs/node/blob/v13.0.1/lib/_http_agent.js */
 
-var platform = process.env.GRACEFUL_FS_PLATFORM || process.platform
+module.exports = options => {
+	let servername = options.host;
+	const hostHeader = options.headers && options.headers.host;
 
-process.cwd = function() {
-  if (!cwd)
-    cwd = origCwd.call(process)
-  return cwd
+	if (hostHeader) {
+		if (hostHeader.startsWith('[')) {
+			const index = hostHeader.indexOf(']');
+			if (index === -1) {
+				servername = hostHeader;
+			} else {
+				servername = hostHeader.slice(1, -1);
+			}
+		} else {
+			servername = hostHeader.split(':', 1)[0];
+		}
+	}
+
+	if (net.isIP(servername)) {
+		return '';
+	}
+
+	return servername;
+};
+
+
+/***/ }),
+
+/***/ 7087:
+/***/ ((module) => {
+
+"use strict";
+
+/* istanbul ignore file: https://github.com/nodejs/node/blob/master/lib/internal/errors.js */
+
+const makeError = (Base, key, getMessage) => {
+	module.exports[key] = class NodeError extends Base {
+		constructor(...args) {
+			super(typeof getMessage === 'string' ? getMessage : getMessage(args));
+			this.name = `${super.name} [${key}]`;
+			this.code = key;
+		}
+	};
+};
+
+makeError(TypeError, 'ERR_INVALID_ARG_TYPE', args => {
+	const type = args[0].includes('.') ? 'property' : 'argument';
+
+	let valid = args[1];
+	const isManyTypes = Array.isArray(valid);
+
+	if (isManyTypes) {
+		valid = `${valid.slice(0, -1).join(', ')} or ${valid.slice(-1)}`;
+	}
+
+	return `The "${args[0]}" ${type} must be ${isManyTypes ? 'one of' : 'of'} type ${valid}. Received ${typeof args[2]}`;
+});
+
+makeError(TypeError, 'ERR_INVALID_PROTOCOL', args => {
+	return `Protocol "${args[0]}" not supported. Expected "${args[1]}"`;
+});
+
+makeError(Error, 'ERR_HTTP_HEADERS_SENT', args => {
+	return `Cannot ${args[0]} headers after they are sent to the client`;
+});
+
+makeError(TypeError, 'ERR_INVALID_HTTP_TOKEN', args => {
+	return `${args[0]} must be a valid HTTP token [${args[1]}]`;
+});
+
+makeError(TypeError, 'ERR_HTTP_INVALID_HEADER_VALUE', args => {
+	return `Invalid value "${args[0]} for header "${args[1]}"`;
+});
+
+makeError(TypeError, 'ERR_INVALID_CHAR', args => {
+	return `Invalid character in ${args[0]} [${args[1]}]`;
+});
+
+
+/***/ }),
+
+/***/ 1199:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = header => {
+	switch (header) {
+		case ':method':
+		case ':scheme':
+		case ':authority':
+		case ':path':
+			return true;
+		default:
+			return false;
+	}
+};
+
+
+/***/ }),
+
+/***/ 1818:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = (from, to, events) => {
+	for (const event of events) {
+		from.on(event, (...args) => to.emit(event, ...args));
+	}
+};
+
+
+/***/ }),
+
+/***/ 2686:
+/***/ ((module) => {
+
+"use strict";
+
+/* istanbul ignore file: https://github.com/nodejs/node/blob/a91293d4d9ab403046ab5eb022332e4e3d249bd3/lib/internal/url.js#L1257 */
+
+module.exports = url => {
+	const options = {
+		protocol: url.protocol,
+		hostname: typeof url.hostname === 'string' && url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname,
+		host: url.host,
+		hash: url.hash,
+		search: url.search,
+		pathname: url.pathname,
+		href: url.href,
+		path: `${url.pathname || ''}${url.search || ''}`
+	};
+
+	if (typeof url.port === 'string' && url.port.length !== 0) {
+		options.port = Number(url.port);
+	}
+
+	if (url.username || url.password) {
+		options.auth = `${url.username || ''}:${url.password || ''}`;
+	}
+
+	return options;
+};
+
+
+/***/ }),
+
+/***/ 2820:
+/***/ ((__unused_webpack_module, exports) => {
+
+//TODO: handle reviver/dehydrate function like normal
+//and handle indentation, like normal.
+//if anyone needs this... please send pull request.
+
+exports.stringify = function stringify (o) {
+  if('undefined' == typeof o) return o
+
+  if(o && Buffer.isBuffer(o))
+    return JSON.stringify(':base64:' + o.toString('base64'))
+
+  if(o && o.toJSON)
+    o =  o.toJSON()
+
+  if(o && 'object' === typeof o) {
+    var s = ''
+    var array = Array.isArray(o)
+    s = array ? '[' : '{'
+    var first = true
+
+    for(var k in o) {
+      var ignore = 'function' == typeof o[k] || (!array && 'undefined' === typeof o[k])
+      if(Object.hasOwnProperty.call(o, k) && !ignore) {
+        if(!first)
+          s += ','
+        first = false
+        if (array) {
+          if(o[k] == undefined)
+            s += 'null'
+          else
+            s += stringify(o[k])
+        } else if (o[k] !== void(0)) {
+          s += stringify(k) + ':' + stringify(o[k])
+        }
+      }
+    }
+
+    s += array ? ']' : '}'
+
+    return s
+  } else if ('string' === typeof o) {
+    return JSON.stringify(/^:/.test(o) ? ':' + o : o)
+  } else if ('undefined' === typeof o) {
+    return 'null';
+  } else
+    return JSON.stringify(o)
 }
-try {
-  process.cwd()
-} catch (er) {}
 
-// This check is needed until node.js 12 is required
-if (typeof process.chdir === 'function') {
-  var chdir = process.chdir
-  process.chdir = function (d) {
-    cwd = null
-    chdir.call(process, d)
-  }
-  if (Object.setPrototypeOf) Object.setPrototypeOf(process.chdir, chdir)
-}
-
-module.exports = patch
-
-function patch (fs) {
-  // (re-)implement some things that are known busted or missing.
-
-  // lchmod, broken prior to 0.6.2
-  // back-port the fix here.
-  if (constants.hasOwnProperty('O_SYMLINK') &&
-      process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-    patchLchmod(fs)
-  }
-
-  // lutimes implementation, or no-op
-  if (!fs.lutimes) {
-    patchLutimes(fs)
-  }
-
-  // https://github.com/isaacs/node-graceful-fs/issues/4
-  // Chown should not fail on einval or eperm if non-root.
-  // It should not fail on enosys ever, as this just indicates
-  // that a fs doesn't support the intended operation.
-
-  fs.chown = chownFix(fs.chown)
-  fs.fchown = chownFix(fs.fchown)
-  fs.lchown = chownFix(fs.lchown)
-
-  fs.chmod = chmodFix(fs.chmod)
-  fs.fchmod = chmodFix(fs.fchmod)
-  fs.lchmod = chmodFix(fs.lchmod)
-
-  fs.chownSync = chownFixSync(fs.chownSync)
-  fs.fchownSync = chownFixSync(fs.fchownSync)
-  fs.lchownSync = chownFixSync(fs.lchownSync)
-
-  fs.chmodSync = chmodFixSync(fs.chmodSync)
-  fs.fchmodSync = chmodFixSync(fs.fchmodSync)
-  fs.lchmodSync = chmodFixSync(fs.lchmodSync)
-
-  fs.stat = statFix(fs.stat)
-  fs.fstat = statFix(fs.fstat)
-  fs.lstat = statFix(fs.lstat)
-
-  fs.statSync = statFixSync(fs.statSync)
-  fs.fstatSync = statFixSync(fs.fstatSync)
-  fs.lstatSync = statFixSync(fs.lstatSync)
-
-  // if lchmod/lchown do not exist, then make them no-ops
-  if (!fs.lchmod) {
-    fs.lchmod = function (path, mode, cb) {
-      if (cb) process.nextTick(cb)
+exports.parse = function (s) {
+  return JSON.parse(s, function (key, value) {
+    if('string' === typeof value) {
+      if(/^:base64:/.test(value))
+        return Buffer.from(value.substring(8), 'base64')
+      else
+        return /^:/.test(value) ? value.substring(1) : value 
     }
-    fs.lchmodSync = function () {}
-  }
-  if (!fs.lchown) {
-    fs.lchown = function (path, uid, gid, cb) {
-      if (cb) process.nextTick(cb)
-    }
-    fs.lchownSync = function () {}
-  }
-
-  // on Windows, A/V software can lock the directory, causing this
-  // to fail with an EACCES or EPERM if the directory contains newly
-  // created files.  Try again on failure, for up to 60 seconds.
-
-  // Set the timeout this long because some Windows Anti-Virus, such as Parity
-  // bit9, may lock files for up to a minute, causing npm package install
-  // failures. Also, take care to yield the scheduler. Windows scheduling gives
-  // CPU to a busy looping process, which can cause the program causing the lock
-  // contention to be starved of CPU by node, so the contention doesn't resolve.
-  if (platform === "win32") {
-    fs.rename = (function (fs$rename) { return function (from, to, cb) {
-      var start = Date.now()
-      var backoff = 0;
-      fs$rename(from, to, function CB (er) {
-        if (er
-            && (er.code === "EACCES" || er.code === "EPERM")
-            && Date.now() - start < 60000) {
-          setTimeout(function() {
-            fs.stat(to, function (stater, st) {
-              if (stater && stater.code === "ENOENT")
-                fs$rename(from, to, CB);
-              else
-                cb(er)
-            })
-          }, backoff)
-          if (backoff < 100)
-            backoff += 10;
-          return;
-        }
-        if (cb) cb(er)
-      })
-    }})(fs.rename)
-  }
-
-  // if read() returns EAGAIN, then just try it again.
-  fs.read = (function (fs$read) {
-    function read (fd, buffer, offset, length, position, callback_) {
-      var callback
-      if (callback_ && typeof callback_ === 'function') {
-        var eagCounter = 0
-        callback = function (er, _, __) {
-          if (er && er.code === 'EAGAIN' && eagCounter < 10) {
-            eagCounter ++
-            return fs$read.call(fs, fd, buffer, offset, length, position, callback)
-          }
-          callback_.apply(this, arguments)
-        }
-      }
-      return fs$read.call(fs, fd, buffer, offset, length, position, callback)
-    }
-
-    // This ensures `util.promisify` works as it does for native `fs.read`.
-    if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read)
-    return read
-  })(fs.read)
-
-  fs.readSync = (function (fs$readSync) { return function (fd, buffer, offset, length, position) {
-    var eagCounter = 0
-    while (true) {
-      try {
-        return fs$readSync.call(fs, fd, buffer, offset, length, position)
-      } catch (er) {
-        if (er.code === 'EAGAIN' && eagCounter < 10) {
-          eagCounter ++
-          continue
-        }
-        throw er
-      }
-    }
-  }})(fs.readSync)
-
-  function patchLchmod (fs) {
-    fs.lchmod = function (path, mode, callback) {
-      fs.open( path
-             , constants.O_WRONLY | constants.O_SYMLINK
-             , mode
-             , function (err, fd) {
-        if (err) {
-          if (callback) callback(err)
-          return
-        }
-        // prefer to return the chmod error, if one occurs,
-        // but still try to close, and report closing errors if they occur.
-        fs.fchmod(fd, mode, function (err) {
-          fs.close(fd, function(err2) {
-            if (callback) callback(err || err2)
-          })
-        })
-      })
-    }
-
-    fs.lchmodSync = function (path, mode) {
-      var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode)
-
-      // prefer to return the chmod error, if one occurs,
-      // but still try to close, and report closing errors if they occur.
-      var threw = true
-      var ret
-      try {
-        ret = fs.fchmodSync(fd, mode)
-        threw = false
-      } finally {
-        if (threw) {
-          try {
-            fs.closeSync(fd)
-          } catch (er) {}
-        } else {
-          fs.closeSync(fd)
-        }
-      }
-      return ret
-    }
-  }
-
-  function patchLutimes (fs) {
-    if (constants.hasOwnProperty("O_SYMLINK")) {
-      fs.lutimes = function (path, at, mt, cb) {
-        fs.open(path, constants.O_SYMLINK, function (er, fd) {
-          if (er) {
-            if (cb) cb(er)
-            return
-          }
-          fs.futimes(fd, at, mt, function (er) {
-            fs.close(fd, function (er2) {
-              if (cb) cb(er || er2)
-            })
-          })
-        })
-      }
-
-      fs.lutimesSync = function (path, at, mt) {
-        var fd = fs.openSync(path, constants.O_SYMLINK)
-        var ret
-        var threw = true
-        try {
-          ret = fs.futimesSync(fd, at, mt)
-          threw = false
-        } finally {
-          if (threw) {
-            try {
-              fs.closeSync(fd)
-            } catch (er) {}
-          } else {
-            fs.closeSync(fd)
-          }
-        }
-        return ret
-      }
-
-    } else {
-      fs.lutimes = function (_a, _b, _c, cb) { if (cb) process.nextTick(cb) }
-      fs.lutimesSync = function () {}
-    }
-  }
-
-  function chmodFix (orig) {
-    if (!orig) return orig
-    return function (target, mode, cb) {
-      return orig.call(fs, target, mode, function (er) {
-        if (chownErOk(er)) er = null
-        if (cb) cb.apply(this, arguments)
-      })
-    }
-  }
-
-  function chmodFixSync (orig) {
-    if (!orig) return orig
-    return function (target, mode) {
-      try {
-        return orig.call(fs, target, mode)
-      } catch (er) {
-        if (!chownErOk(er)) throw er
-      }
-    }
-  }
-
-
-  function chownFix (orig) {
-    if (!orig) return orig
-    return function (target, uid, gid, cb) {
-      return orig.call(fs, target, uid, gid, function (er) {
-        if (chownErOk(er)) er = null
-        if (cb) cb.apply(this, arguments)
-      })
-    }
-  }
-
-  function chownFixSync (orig) {
-    if (!orig) return orig
-    return function (target, uid, gid) {
-      try {
-        return orig.call(fs, target, uid, gid)
-      } catch (er) {
-        if (!chownErOk(er)) throw er
-      }
-    }
-  }
-
-  function statFix (orig) {
-    if (!orig) return orig
-    // Older versions of Node erroneously returned signed integers for
-    // uid + gid.
-    return function (target, options, cb) {
-      if (typeof options === 'function') {
-        cb = options
-        options = null
-      }
-      function callback (er, stats) {
-        if (stats) {
-          if (stats.uid < 0) stats.uid += 0x100000000
-          if (stats.gid < 0) stats.gid += 0x100000000
-        }
-        if (cb) cb.apply(this, arguments)
-      }
-      return options ? orig.call(fs, target, options, callback)
-        : orig.call(fs, target, callback)
-    }
-  }
-
-  function statFixSync (orig) {
-    if (!orig) return orig
-    // Older versions of Node erroneously returned signed integers for
-    // uid + gid.
-    return function (target, options) {
-      var stats = options ? orig.call(fs, target, options)
-        : orig.call(fs, target)
-      if (stats.uid < 0) stats.uid += 0x100000000
-      if (stats.gid < 0) stats.gid += 0x100000000
-      return stats;
-    }
-  }
-
-  // ENOSYS means that the fs doesn't support the op. Just ignore
-  // that, because it doesn't matter.
-  //
-  // if there's no getuid, or if getuid() is something other
-  // than 0, and the error is EINVAL or EPERM, then just ignore
-  // it.
-  //
-  // This specific case is a silent failure in cp, install, tar,
-  // and most other unix tools that manage permissions.
-  //
-  // When running as root, or if other types of errors are
-  // encountered, then it's strict.
-  function chownErOk (er) {
-    if (!er)
-      return true
-
-    if (er.code === "ENOSYS")
-      return true
-
-    var nonroot = !process.getuid || process.getuid() !== 0
-    if (nonroot) {
-      if (er.code === "EINVAL" || er.code === "EPERM")
-        return true
-    }
-
-    return false
-  }
+    return value
+  })
 }
 
 
 /***/ }),
 
-/***/ 2527:
-/***/ ((module) => {
-
-/**
- * @preserve
- * JS Implementation of incremental MurmurHash3 (r150) (as of May 10, 2013)
- *
- * @author <a href="mailto:jensyt@gmail.com">Jens Taylor</a>
- * @see http://github.com/homebrewing/brauhaus-diff
- * @author <a href="mailto:gary.court@gmail.com">Gary Court</a>
- * @see http://github.com/garycourt/murmurhash-js
- * @author <a href="mailto:aappleby@gmail.com">Austin Appleby</a>
- * @see http://sites.google.com/site/murmurhash/
- */
-(function(){
-    var cache;
-
-    // Call this function without `new` to use the cached object (good for
-    // single-threaded environments), or with `new` to create a new object.
-    //
-    // @param {string} key A UTF-16 or ASCII string
-    // @param {number} seed An optional positive integer
-    // @return {object} A MurmurHash3 object for incremental hashing
-    function MurmurHash3(key, seed) {
-        var m = this instanceof MurmurHash3 ? this : cache;
-        m.reset(seed)
-        if (typeof key === 'string' && key.length > 0) {
-            m.hash(key);
-        }
-
-        if (m !== this) {
-            return m;
-        }
-    };
-
-    // Incrementally add a string to this hash
-    //
-    // @param {string} key A UTF-16 or ASCII string
-    // @return {object} this
-    MurmurHash3.prototype.hash = function(key) {
-        var h1, k1, i, top, len;
-
-        len = key.length;
-        this.len += len;
-
-        k1 = this.k1;
-        i = 0;
-        switch (this.rem) {
-            case 0: k1 ^= len > i ? (key.charCodeAt(i++) & 0xffff) : 0;
-            case 1: k1 ^= len > i ? (key.charCodeAt(i++) & 0xffff) << 8 : 0;
-            case 2: k1 ^= len > i ? (key.charCodeAt(i++) & 0xffff) << 16 : 0;
-            case 3:
-                k1 ^= len > i ? (key.charCodeAt(i) & 0xff) << 24 : 0;
-                k1 ^= len > i ? (key.charCodeAt(i++) & 0xff00) >> 8 : 0;
-        }
-
-        this.rem = (len + this.rem) & 3; // & 3 is same as % 4
-        len -= this.rem;
-        if (len > 0) {
-            h1 = this.h1;
-            while (1) {
-                k1 = (k1 * 0x2d51 + (k1 & 0xffff) * 0xcc9e0000) & 0xffffffff;
-                k1 = (k1 << 15) | (k1 >>> 17);
-                k1 = (k1 * 0x3593 + (k1 & 0xffff) * 0x1b870000) & 0xffffffff;
-
-                h1 ^= k1;
-                h1 = (h1 << 13) | (h1 >>> 19);
-                h1 = (h1 * 5 + 0xe6546b64) & 0xffffffff;
-
-                if (i >= len) {
-                    break;
-                }
-
-                k1 = ((key.charCodeAt(i++) & 0xffff)) ^
-                     ((key.charCodeAt(i++) & 0xffff) << 8) ^
-                     ((key.charCodeAt(i++) & 0xffff) << 16);
-                top = key.charCodeAt(i++);
-                k1 ^= ((top & 0xff) << 24) ^
-                      ((top & 0xff00) >> 8);
-            }
-
-            k1 = 0;
-            switch (this.rem) {
-                case 3: k1 ^= (key.charCodeAt(i + 2) & 0xffff) << 16;
-                case 2: k1 ^= (key.charCodeAt(i + 1) & 0xffff) << 8;
-                case 1: k1 ^= (key.charCodeAt(i) & 0xffff);
-            }
-
-            this.h1 = h1;
-        }
-
-        this.k1 = k1;
-        return this;
-    };
-
-    // Get the result of this hash
-    //
-    // @return {number} The 32-bit hash
-    MurmurHash3.prototype.result = function() {
-        var k1, h1;
-        
-        k1 = this.k1;
-        h1 = this.h1;
-
-        if (k1 > 0) {
-            k1 = (k1 * 0x2d51 + (k1 & 0xffff) * 0xcc9e0000) & 0xffffffff;
-            k1 = (k1 << 15) | (k1 >>> 17);
-            k1 = (k1 * 0x3593 + (k1 & 0xffff) * 0x1b870000) & 0xffffffff;
-            h1 ^= k1;
-        }
-
-        h1 ^= this.len;
-
-        h1 ^= h1 >>> 16;
-        h1 = (h1 * 0xca6b + (h1 & 0xffff) * 0x85eb0000) & 0xffffffff;
-        h1 ^= h1 >>> 13;
-        h1 = (h1 * 0xae35 + (h1 & 0xffff) * 0xc2b20000) & 0xffffffff;
-        h1 ^= h1 >>> 16;
-
-        return h1 >>> 0;
-    };
-
-    // Reset the hash object for reuse
-    //
-    // @param {number} seed An optional positive integer
-    MurmurHash3.prototype.reset = function(seed) {
-        this.h1 = typeof seed === 'number' ? seed : 0;
-        this.rem = this.k1 = this.len = 0;
-        return this;
-    };
-
-    // A cached object to use. This can be safely used if you're in a single-
-    // threaded environment, otherwise you need to create new hashes to use.
-    cache = new MurmurHash3();
-
-    if (true) {
-        module.exports = MurmurHash3;
-    } else {}
-}());
-
-
-/***/ }),
-
-/***/ 1389:
-/***/ ((module) => {
-
-"use strict";
-
-module.exports = function (x) {
-	var type = typeof x;
-	return x !== null && (type === 'object' || type === 'function');
-};
-
-
-/***/ }),
-
-/***/ 4409:
-/***/ ((module) => {
-
-"use strict";
-
-module.exports = function (x) {
-	if (typeof x !== 'number') {
-		throw new TypeError('Expected a number');
-	}
-
-	return x === 300 ||
-		x === 301 ||
-		x === 302 ||
-		x === 303 ||
-		x === 305 ||
-		x === 307 ||
-		x === 308;
-};
-
-
-/***/ }),
-
-/***/ 841:
-/***/ ((module) => {
+/***/ 1531:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
 
 
-var WHITELIST = [
-	'ETIMEDOUT',
-	'ECONNRESET',
-	'EADDRINUSE',
-	'ESOCKETTIMEDOUT',
-	'ECONNREFUSED',
-	'EPIPE',
-	'EHOSTUNREACH',
-	'EAI_AGAIN'
-];
+const EventEmitter = __nccwpck_require__(8614);
+const JSONB = __nccwpck_require__(2820);
 
-var BLACKLIST = [
-	'ENOTFOUND',
-	'ENETUNREACH',
-
-	// SSL errors from https://github.com/nodejs/node/blob/ed3d8b13ee9a705d89f9e0397d9e96519e7e47ac/src/node_crypto.cc#L1950
-	'UNABLE_TO_GET_ISSUER_CERT',
-	'UNABLE_TO_GET_CRL',
-	'UNABLE_TO_DECRYPT_CERT_SIGNATURE',
-	'UNABLE_TO_DECRYPT_CRL_SIGNATURE',
-	'UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY',
-	'CERT_SIGNATURE_FAILURE',
-	'CRL_SIGNATURE_FAILURE',
-	'CERT_NOT_YET_VALID',
-	'CERT_HAS_EXPIRED',
-	'CRL_NOT_YET_VALID',
-	'CRL_HAS_EXPIRED',
-	'ERROR_IN_CERT_NOT_BEFORE_FIELD',
-	'ERROR_IN_CERT_NOT_AFTER_FIELD',
-	'ERROR_IN_CRL_LAST_UPDATE_FIELD',
-	'ERROR_IN_CRL_NEXT_UPDATE_FIELD',
-	'OUT_OF_MEM',
-	'DEPTH_ZERO_SELF_SIGNED_CERT',
-	'SELF_SIGNED_CERT_IN_CHAIN',
-	'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-	'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-	'CERT_CHAIN_TOO_LONG',
-	'CERT_REVOKED',
-	'INVALID_CA',
-	'PATH_LENGTH_EXCEEDED',
-	'INVALID_PURPOSE',
-	'CERT_UNTRUSTED',
-	'CERT_REJECTED'
-];
-
-module.exports = function (err) {
-	if (!err || !err.code) {
-		return true;
+const loadStore = opts => {
+	const adapters = {
+		redis: '@keyv/redis',
+		mongodb: '@keyv/mongo',
+		mongo: '@keyv/mongo',
+		sqlite: '@keyv/sqlite',
+		postgresql: '@keyv/postgres',
+		postgres: '@keyv/postgres',
+		mysql: '@keyv/mysql'
+	};
+	if (opts.adapter || opts.uri) {
+		const adapter = opts.adapter || /^[^:]*/.exec(opts.uri)[0];
+		return new (require(adapters[adapter]))(opts);
 	}
 
-	if (WHITELIST.indexOf(err.code) !== -1) {
-		return true;
+	return new Map();
+};
+
+class Keyv extends EventEmitter {
+	constructor(uri, opts) {
+		super();
+		this.opts = Object.assign(
+			{
+				namespace: 'keyv',
+				serialize: JSONB.stringify,
+				deserialize: JSONB.parse
+			},
+			(typeof uri === 'string') ? { uri } : uri,
+			opts
+		);
+
+		if (!this.opts.store) {
+			const adapterOpts = Object.assign({}, this.opts);
+			this.opts.store = loadStore(adapterOpts);
+		}
+
+		if (typeof this.opts.store.on === 'function') {
+			this.opts.store.on('error', err => this.emit('error', err));
+		}
+
+		this.opts.store.namespace = this.opts.namespace;
 	}
 
-	if (BLACKLIST.indexOf(err.code) !== -1) {
-		return false;
+	_getKeyPrefix(key) {
+		return `${this.opts.namespace}:${key}`;
 	}
 
-	return true;
-};
+	get(key, opts) {
+		const keyPrefixed = this._getKeyPrefix(key);
+		const { store } = this.opts;
+		return Promise.resolve()
+			.then(() => store.get(keyPrefixed))
+			.then(data => {
+				return (typeof data === 'string') ? this.opts.deserialize(data) : data;
+			})
+			.then(data => {
+				if (data === undefined) {
+					return undefined;
+				}
 
+				if (typeof data.expires === 'number' && Date.now() > data.expires) {
+					this.delete(key);
+					return undefined;
+				}
 
-/***/ }),
+				return (opts && opts.raw) ? data : data.value;
+			});
+	}
 
-/***/ 1554:
-/***/ ((module) => {
+	set(key, value, ttl) {
+		const keyPrefixed = this._getKeyPrefix(key);
+		if (typeof ttl === 'undefined') {
+			ttl = this.opts.ttl;
+		}
 
-"use strict";
+		if (ttl === 0) {
+			ttl = undefined;
+		}
 
+		const { store } = this.opts;
 
-var isStream = module.exports = function (stream) {
-	return stream !== null && typeof stream === 'object' && typeof stream.pipe === 'function';
-};
+		return Promise.resolve()
+			.then(() => {
+				const expires = (typeof ttl === 'number') ? (Date.now() + ttl) : null;
+				value = { value, expires };
+				return this.opts.serialize(value);
+			})
+			.then(value => store.set(keyPrefixed, value, ttl))
+			.then(() => true);
+	}
 
-isStream.writable = function (stream) {
-	return isStream(stream) && stream.writable !== false && typeof stream._write === 'function' && typeof stream._writableState === 'object';
-};
+	delete(key) {
+		const keyPrefixed = this._getKeyPrefix(key);
+		const { store } = this.opts;
+		return Promise.resolve()
+			.then(() => store.delete(keyPrefixed));
+	}
 
-isStream.readable = function (stream) {
-	return isStream(stream) && stream.readable !== false && typeof stream._read === 'function' && typeof stream._readableState === 'object';
-};
+	clear() {
+		const { store } = this.opts;
+		return Promise.resolve()
+			.then(() => store.clear());
+	}
+}
 
-isStream.duplex = function (stream) {
-	return isStream.writable(stream) && isStream.readable(stream);
-};
-
-isStream.transform = function (stream) {
-	return isStream.duplex(stream) && typeof stream._transform === 'function' && typeof stream._transformState === 'object';
-};
+module.exports = Keyv;
 
 
 /***/ }),
@@ -6831,168 +11201,55 @@ isStream.transform = function (stream) {
 
 "use strict";
 
-module.exports = function (obj) {
-	var ret = {};
-	var keys = Object.keys(Object(obj));
+module.exports = object => {
+	const result = {};
 
-	for (var i = 0; i < keys.length; i++) {
-		ret[keys[i].toLowerCase()] = obj[keys[i]];
+	for (const [key, value] of Object.entries(object)) {
+		result[key.toLowerCase()] = value;
 	}
 
-	return ret;
+	return result;
 };
 
 
 /***/ }),
 
-/***/ 6186:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-var path = __nccwpck_require__(5622);
-var fs = __nccwpck_require__(5747);
-var _0777 = parseInt('0777', 8);
-
-module.exports = mkdirP.mkdirp = mkdirP.mkdirP = mkdirP;
-
-function mkdirP (p, opts, f, made) {
-    if (typeof opts === 'function') {
-        f = opts;
-        opts = {};
-    }
-    else if (!opts || typeof opts !== 'object') {
-        opts = { mode: opts };
-    }
-    
-    var mode = opts.mode;
-    var xfs = opts.fs || fs;
-    
-    if (mode === undefined) {
-        mode = _0777
-    }
-    if (!made) made = null;
-    
-    var cb = f || function () {};
-    p = path.resolve(p);
-    
-    xfs.mkdir(p, mode, function (er) {
-        if (!er) {
-            made = made || p;
-            return cb(null, made);
-        }
-        switch (er.code) {
-            case 'ENOENT':
-                if (path.dirname(p) === p) return cb(er);
-                mkdirP(path.dirname(p), opts, function (er, made) {
-                    if (er) cb(er, made);
-                    else mkdirP(p, opts, cb, made);
-                });
-                break;
-
-            // In the case of any other error, just see if there's a dir
-            // there already.  If so, then hooray!  If not, then something
-            // is borked.
-            default:
-                xfs.stat(p, function (er2, stat) {
-                    // if the stat fails, then that's super weird.
-                    // let the original error be the failure reason.
-                    if (er2 || !stat.isDirectory()) cb(er, made)
-                    else cb(null, made);
-                });
-                break;
-        }
-    });
-}
-
-mkdirP.sync = function sync (p, opts, made) {
-    if (!opts || typeof opts !== 'object') {
-        opts = { mode: opts };
-    }
-    
-    var mode = opts.mode;
-    var xfs = opts.fs || fs;
-    
-    if (mode === undefined) {
-        mode = _0777
-    }
-    if (!made) made = null;
-
-    p = path.resolve(p);
-
-    try {
-        xfs.mkdirSync(p, mode);
-        made = made || p;
-    }
-    catch (err0) {
-        switch (err0.code) {
-            case 'ENOENT' :
-                made = sync(path.dirname(p), opts, made);
-                sync(p, opts, made);
-                break;
-
-            // In the case of any other error, just see if there's a dir
-            // there already.  If so, then hooray!  If not, then something
-            // is borked.
-            default:
-                var stat;
-                try {
-                    stat = xfs.statSync(p);
-                }
-                catch (err1) {
-                    throw err0;
-                }
-                if (!stat.isDirectory()) throw err0;
-                break;
-        }
-    }
-
-    return made;
-};
-
-
-/***/ }),
-
-/***/ 1286:
+/***/ 2610:
 /***/ ((module) => {
 
 "use strict";
 
 
-module.exports = nGram
+// We define these manually to ensure they're always copied
+// even if they would move up the prototype chain
+// https://nodejs.org/api/http.html#http_class_http_incomingmessage
+const knownProps = [
+	'destroy',
+	'setTimeout',
+	'socket',
+	'headers',
+	'trailers',
+	'rawHeaders',
+	'statusCode',
+	'httpVersion',
+	'httpVersionMinor',
+	'httpVersionMajor',
+	'rawTrailers',
+	'statusMessage'
+];
 
-nGram.bigram = nGram(2)
-nGram.trigram = nGram(3)
+module.exports = (fromStream, toStream) => {
+	const fromProps = new Set(Object.keys(fromStream).concat(knownProps));
 
-// Factory returning a function that converts a value string to n-grams.
-function nGram(n) {
-  if (typeof n !== 'number' || isNaN(n) || n < 1 || n === Infinity) {
-    throw new Error('`' + n + '` is not a valid argument for n-gram')
-  }
+	for (const prop of fromProps) {
+		// Don't overwrite existing properties
+		if (prop in toStream) {
+			continue;
+		}
 
-  return grams
-
-  // Create n-grams from a given value.
-  function grams(value) {
-    var nGrams = []
-    var index
-
-    if (value === null || value === undefined) {
-      return nGrams
-    }
-
-    value = value.slice ? value : String(value)
-    index = value.length - n + 1
-
-    if (index < 1) {
-      return nGrams
-    }
-
-    while (index--) {
-      nGrams[index] = value.slice(index, index + n)
-    }
-
-    return nGrams
-  }
-}
+		toStream[prop] = typeof fromStream[prop] === 'function' ? fromStream[prop].bind(fromStream) : fromStream[prop];
+	}
+};
 
 
 /***/ }),
@@ -8654,100 +12911,231 @@ exports.FetchError = FetchError;
 
 /***/ }),
 
-/***/ 7426:
-/***/ ((module) => {
+/***/ 7952:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
-/*
-object-assign
-(c) Sindre Sorhus
-@license MIT
-*/
 
+// TODO: Use the `URL` global when targeting Node.js 10
+const URLParser = typeof URL === 'undefined' ? __nccwpck_require__(8835).URL : URL;
 
-/* eslint-disable no-unused-vars */
-var getOwnPropertySymbols = Object.getOwnPropertySymbols;
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-var propIsEnumerable = Object.prototype.propertyIsEnumerable;
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
+const DATA_URL_DEFAULT_MIME_TYPE = 'text/plain';
+const DATA_URL_DEFAULT_CHARSET = 'us-ascii';
 
-function toObject(val) {
-	if (val === null || val === undefined) {
-		throw new TypeError('Object.assign cannot be called with null or undefined');
+const testParameter = (name, filters) => {
+	return filters.some(filter => filter instanceof RegExp ? filter.test(name) : filter === name);
+};
+
+const normalizeDataURL = (urlString, {stripHash}) => {
+	const parts = urlString.match(/^data:(.*?),(.*?)(?:#(.*))?$/);
+
+	if (!parts) {
+		throw new Error(`Invalid URL: ${urlString}`);
 	}
 
-	return Object(val);
-}
+	const mediaType = parts[1].split(';');
+	const body = parts[2];
+	const hash = stripHash ? '' : parts[3];
 
-function shouldUseNative() {
-	try {
-		if (!Object.assign) {
-			return false;
-		}
+	let base64 = false;
 
-		// Detect buggy property enumeration order in older V8 versions.
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
-		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
-		test1[5] = 'de';
-		if (Object.getOwnPropertyNames(test1)[0] === '5') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test2 = {};
-		for (var i = 0; i < 10; i++) {
-			test2['_' + String.fromCharCode(i)] = i;
-		}
-		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
-			return test2[n];
-		});
-		if (order2.join('') !== '0123456789') {
-			return false;
-		}
-
-		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
-		var test3 = {};
-		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
-			test3[letter] = letter;
-		});
-		if (Object.keys(Object.assign({}, test3)).join('') !==
-				'abcdefghijklmnopqrst') {
-			return false;
-		}
-
-		return true;
-	} catch (err) {
-		// We don't expect any of the above to throw, but better to be safe.
-		return false;
+	if (mediaType[mediaType.length - 1] === 'base64') {
+		mediaType.pop();
+		base64 = true;
 	}
-}
 
-module.exports = shouldUseNative() ? Object.assign : function (target, source) {
-	var from;
-	var to = toObject(target);
-	var symbols;
+	// Lowercase MIME type
+	const mimeType = (mediaType.shift() || '').toLowerCase();
+	const attributes = mediaType
+		.map(attribute => {
+			let [key, value = ''] = attribute.split('=').map(string => string.trim());
 
-	for (var s = 1; s < arguments.length; s++) {
-		from = Object(arguments[s]);
+			// Lowercase `charset`
+			if (key === 'charset') {
+				value = value.toLowerCase();
 
-		for (var key in from) {
-			if (hasOwnProperty.call(from, key)) {
-				to[key] = from[key];
-			}
-		}
-
-		if (getOwnPropertySymbols) {
-			symbols = getOwnPropertySymbols(from);
-			for (var i = 0; i < symbols.length; i++) {
-				if (propIsEnumerable.call(from, symbols[i])) {
-					to[symbols[i]] = from[symbols[i]];
+				if (value === DATA_URL_DEFAULT_CHARSET) {
+					return '';
 				}
 			}
+
+			return `${key}${value ? `=${value}` : ''}`;
+		})
+		.filter(Boolean);
+
+	const normalizedMediaType = [
+		...attributes
+	];
+
+	if (base64) {
+		normalizedMediaType.push('base64');
+	}
+
+	if (normalizedMediaType.length !== 0 || (mimeType && mimeType !== DATA_URL_DEFAULT_MIME_TYPE)) {
+		normalizedMediaType.unshift(mimeType);
+	}
+
+	return `data:${normalizedMediaType.join(';')},${base64 ? body.trim() : body}${hash ? `#${hash}` : ''}`;
+};
+
+const normalizeUrl = (urlString, options) => {
+	options = {
+		defaultProtocol: 'http:',
+		normalizeProtocol: true,
+		forceHttp: false,
+		forceHttps: false,
+		stripAuthentication: true,
+		stripHash: false,
+		stripWWW: true,
+		removeQueryParameters: [/^utm_\w+/i],
+		removeTrailingSlash: true,
+		removeDirectoryIndex: false,
+		sortQueryParameters: true,
+		...options
+	};
+
+	// TODO: Remove this at some point in the future
+	if (Reflect.has(options, 'normalizeHttps')) {
+		throw new Error('options.normalizeHttps is renamed to options.forceHttp');
+	}
+
+	if (Reflect.has(options, 'normalizeHttp')) {
+		throw new Error('options.normalizeHttp is renamed to options.forceHttps');
+	}
+
+	if (Reflect.has(options, 'stripFragment')) {
+		throw new Error('options.stripFragment is renamed to options.stripHash');
+	}
+
+	urlString = urlString.trim();
+
+	// Data URL
+	if (/^data:/i.test(urlString)) {
+		return normalizeDataURL(urlString, options);
+	}
+
+	const hasRelativeProtocol = urlString.startsWith('//');
+	const isRelativeUrl = !hasRelativeProtocol && /^\.*\//.test(urlString);
+
+	// Prepend protocol
+	if (!isRelativeUrl) {
+		urlString = urlString.replace(/^(?!(?:\w+:)?\/\/)|^\/\//, options.defaultProtocol);
+	}
+
+	const urlObj = new URLParser(urlString);
+
+	if (options.forceHttp && options.forceHttps) {
+		throw new Error('The `forceHttp` and `forceHttps` options cannot be used together');
+	}
+
+	if (options.forceHttp && urlObj.protocol === 'https:') {
+		urlObj.protocol = 'http:';
+	}
+
+	if (options.forceHttps && urlObj.protocol === 'http:') {
+		urlObj.protocol = 'https:';
+	}
+
+	// Remove auth
+	if (options.stripAuthentication) {
+		urlObj.username = '';
+		urlObj.password = '';
+	}
+
+	// Remove hash
+	if (options.stripHash) {
+		urlObj.hash = '';
+	}
+
+	// Remove duplicate slashes if not preceded by a protocol
+	if (urlObj.pathname) {
+		// TODO: Use the following instead when targeting Node.js 10
+		// `urlObj.pathname = urlObj.pathname.replace(/(?<!https?:)\/{2,}/g, '/');`
+		urlObj.pathname = urlObj.pathname.replace(/((?!:).|^)\/{2,}/g, (_, p1) => {
+			if (/^(?!\/)/g.test(p1)) {
+				return `${p1}/`;
+			}
+
+			return '/';
+		});
+	}
+
+	// Decode URI octets
+	if (urlObj.pathname) {
+		urlObj.pathname = decodeURI(urlObj.pathname);
+	}
+
+	// Remove directory index
+	if (options.removeDirectoryIndex === true) {
+		options.removeDirectoryIndex = [/^index\.[a-z]+$/];
+	}
+
+	if (Array.isArray(options.removeDirectoryIndex) && options.removeDirectoryIndex.length > 0) {
+		let pathComponents = urlObj.pathname.split('/');
+		const lastComponent = pathComponents[pathComponents.length - 1];
+
+		if (testParameter(lastComponent, options.removeDirectoryIndex)) {
+			pathComponents = pathComponents.slice(0, pathComponents.length - 1);
+			urlObj.pathname = pathComponents.slice(1).join('/') + '/';
 		}
 	}
 
-	return to;
+	if (urlObj.hostname) {
+		// Remove trailing dot
+		urlObj.hostname = urlObj.hostname.replace(/\.$/, '');
+
+		// Remove `www.`
+		if (options.stripWWW && /^www\.([a-z\-\d]{2,63})\.([a-z.]{2,5})$/.test(urlObj.hostname)) {
+			// Each label should be max 63 at length (min: 2).
+			// The extension should be max 5 at length (min: 2).
+			// Source: https://en.wikipedia.org/wiki/Hostname#Restrictions_on_valid_host_names
+			urlObj.hostname = urlObj.hostname.replace(/^www\./, '');
+		}
+	}
+
+	// Remove query unwanted parameters
+	if (Array.isArray(options.removeQueryParameters)) {
+		for (const key of [...urlObj.searchParams.keys()]) {
+			if (testParameter(key, options.removeQueryParameters)) {
+				urlObj.searchParams.delete(key);
+			}
+		}
+	}
+
+	// Sort query parameters
+	if (options.sortQueryParameters) {
+		urlObj.searchParams.sort();
+	}
+
+	if (options.removeTrailingSlash) {
+		urlObj.pathname = urlObj.pathname.replace(/\/$/, '');
+	}
+
+	// Take advantage of many of the Node `url` normalizations
+	urlString = urlObj.toString();
+
+	// Remove ending `/`
+	if ((options.removeTrailingSlash || urlObj.pathname === '/') && urlObj.hash === '') {
+		urlString = urlString.replace(/\/$/, '');
+	}
+
+	// Restore relative protocol, if applicable
+	if (hasRelativeProtocol && !options.normalizeProtocol) {
+		urlString = urlString.replace(/^http:\/\//, '//');
+	}
+
+	// Remove http/https
+	if (options.stripProtocol) {
+		urlString = urlString.replace(/^(?:https?:)?\/\//, '');
+	}
+
+	return urlString;
 };
+
+module.exports = normalizeUrl;
+// TODO: Remove this for the next major release
+module.exports.default = normalizeUrl;
 
 
 /***/ }),
@@ -8801,561 +13189,403 @@ function onceStrict (fn) {
 
 /***/ }),
 
-/***/ 3406:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-var os = __nccwpck_require__(2087);
-
-function homedir() {
-	var env = process.env;
-	var home = env.HOME;
-	var user = env.LOGNAME || env.USER || env.LNAME || env.USERNAME;
-
-	if (process.platform === 'win32') {
-		return env.USERPROFILE || env.HOMEDRIVE + env.HOMEPATH || home || null;
-	}
-
-	if (process.platform === 'darwin') {
-		return home || (user ? '/Users/' + user : null);
-	}
-
-	if (process.platform === 'linux') {
-		return home || (process.getuid() === 0 ? '/root' : (user ? '/home/' + user : null));
-	}
-
-	return home || null;
-}
-
-module.exports = typeof os.homedir === 'function' ? os.homedir : homedir;
-
-
-/***/ }),
-
-/***/ 1284:
-/***/ ((module) => {
-
-"use strict";
-
-var isWindows = process.platform === 'win32';
-var trailingSlashRe = isWindows ? /[^:]\\$/ : /.\/$/;
-
-// https://github.com/nodejs/node/blob/3e7a14381497a3b73dda68d05b5130563cdab420/lib/os.js#L25-L43
-module.exports = function () {
-	var path;
-
-	if (isWindows) {
-		path = process.env.TEMP ||
-			process.env.TMP ||
-			(process.env.SystemRoot || process.env.windir) + '\\temp';
-	} else {
-		path = process.env.TMPDIR ||
-			process.env.TMP ||
-			process.env.TEMP ||
-			'/tmp';
-	}
-
-	if (trailingSlashRe.test(path)) {
-		path = path.slice(0, -1);
-	}
-
-	return path;
-};
-
-
-/***/ }),
-
-/***/ 4669:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-var isWindows = process.platform === 'win32'
-var path = __nccwpck_require__(5622)
-var exec = __nccwpck_require__(3129).exec
-var osTmpdir = __nccwpck_require__(1284)
-var osHomedir = __nccwpck_require__(3406)
-
-// looking up envs is a bit costly.
-// Also, sometimes we want to have a fallback
-// Pass in a callback to wait for the fallback on failures
-// After the first lookup, always returns the same thing.
-function memo (key, lookup, fallback) {
-  var fell = false
-  var falling = false
-  exports[key] = function (cb) {
-    var val = lookup()
-    if (!val && !fell && !falling && fallback) {
-      fell = true
-      falling = true
-      exec(fallback, function (er, output, stderr) {
-        falling = false
-        if (er) return // oh well, we tried
-        val = output.trim()
-      })
-    }
-    exports[key] = function (cb) {
-      if (cb) process.nextTick(cb.bind(null, null, val))
-      return val
-    }
-    if (cb && !falling) process.nextTick(cb.bind(null, null, val))
-    return val
-  }
-}
-
-memo('user', function () {
-  return ( isWindows
-         ? process.env.USERDOMAIN + '\\' + process.env.USERNAME
-         : process.env.USER
-         )
-}, 'whoami')
-
-memo('prompt', function () {
-  return isWindows ? process.env.PROMPT : process.env.PS1
-})
-
-memo('hostname', function () {
-  return isWindows ? process.env.COMPUTERNAME : process.env.HOSTNAME
-}, 'hostname')
-
-memo('tmpdir', function () {
-  return osTmpdir()
-})
-
-memo('home', function () {
-  return osHomedir()
-})
-
-memo('path', function () {
-  return (process.env.PATH ||
-          process.env.Path ||
-          process.env.path).split(isWindows ? ';' : ':')
-})
-
-memo('editor', function () {
-  return process.env.EDITOR ||
-         process.env.VISUAL ||
-         (isWindows ? 'notepad.exe' : 'vi')
-})
-
-memo('shell', function () {
-  return isWindows ? process.env.ComSpec || 'cmd'
-         : process.env.SHELL || 'bash'
-})
-
-
-/***/ }),
-
-/***/ 6143:
-/***/ ((module) => {
-
-"use strict";
-
-module.exports = function (url) {
-	if (typeof url !== 'string') {
-		throw new TypeError('Expected a string, got ' + typeof url);
-	}
-
-	url = url.trim();
-
-	if (/^\.*\/|^(?!localhost)\w+:/.test(url)) {
-		return url;
-	}
-
-	return url.replace(/^(?!(?:\w+:)?\/\/)/, 'http://');
-};
-
-
-/***/ }),
-
-/***/ 1867:
-/***/ ((module, exports, __nccwpck_require__) => {
-
-/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
-/* eslint-disable node/no-deprecated-api */
-var buffer = __nccwpck_require__(4293)
-var Buffer = buffer.Buffer
-
-// alternative to using Object.keys for old browsers
-function copyProps (src, dst) {
-  for (var key in src) {
-    dst[key] = src[key]
-  }
-}
-if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
-  module.exports = buffer
-} else {
-  // Copy properties from require('buffer')
-  copyProps(buffer, exports)
-  exports.Buffer = SafeBuffer
-}
-
-function SafeBuffer (arg, encodingOrOffset, length) {
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-SafeBuffer.prototype = Object.create(Buffer.prototype)
-
-// Copy static methods from Buffer
-copyProps(Buffer, SafeBuffer)
-
-SafeBuffer.from = function (arg, encodingOrOffset, length) {
-  if (typeof arg === 'number') {
-    throw new TypeError('Argument must not be a number')
-  }
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-SafeBuffer.alloc = function (size, fill, encoding) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  var buf = Buffer(size)
-  if (fill !== undefined) {
-    if (typeof encoding === 'string') {
-      buf.fill(fill, encoding)
-    } else {
-      buf.fill(fill)
-    }
-  } else {
-    buf.fill(0)
-  }
-  return buf
-}
-
-SafeBuffer.allocUnsafe = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return Buffer(size)
-}
-
-SafeBuffer.allocUnsafeSlow = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return buffer.SlowBuffer(size)
-}
-
-
-/***/ }),
-
-/***/ 7380:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-var vm = __nccwpck_require__(2184)
-
-module.exports = function safeEval (code, context, opts) {
-  var sandbox = {}
-  var resultKey = 'SAFE_EVAL_' + Math.floor(Math.random() * 1000000)
-  sandbox[resultKey] = {}
-  code = resultKey + '=' + code
-  if (context) {
-    Object.keys(context).forEach(function (key) {
-      sandbox[key] = context[key]
-    })
-  }
-  vm.runInNewContext(code, sandbox, opts)
-  return sandbox[resultKey]
-}
-
-
-/***/ }),
-
-/***/ 4976:
-/***/ ((module) => {
-
-
-/*
-usage:
-
-// do something to a list of things
-asyncMap(myListOfStuff, function (thing, cb) { doSomething(thing.foo, cb) }, cb)
-// do more than one thing to each item
-asyncMap(list, fooFn, barFn, cb)
-
-*/
-
-module.exports = asyncMap
-
-function asyncMap () {
-  var steps = Array.prototype.slice.call(arguments)
-    , list = steps.shift() || []
-    , cb_ = steps.pop()
-  if (typeof cb_ !== "function") throw new Error(
-    "No callback provided to asyncMap")
-  if (!list) return cb_(null, [])
-  if (!Array.isArray(list)) list = [list]
-  var n = steps.length
-    , data = [] // 2d array
-    , errState = null
-    , l = list.length
-    , a = l * n
-  if (!a) return cb_(null, [])
-  function cb (er) {
-    if (er && !errState) errState = er
-
-    var argLen = arguments.length
-    for (var i = 1; i < argLen; i ++) if (arguments[i] !== undefined) {
-      data[i - 1] = (data[i - 1] || []).concat(arguments[i])
-    }
-    // see if any new things have been added.
-    if (list.length > l) {
-      var newList = list.slice(l)
-      a += (list.length - l) * n
-      l = list.length
-      process.nextTick(function () {
-        newList.forEach(function (ar) {
-          steps.forEach(function (fn) { fn(ar, cb) })
-        })
-      })
-    }
-
-    if (--a === 0) cb_.apply(null, [errState].concat(data))
-  }
-  // expect the supplied cb function to be called
-  // "n" times for each thing in the array.
-  list.forEach(function (ar) {
-    steps.forEach(function (fn) { fn(ar, cb) })
-  })
-}
-
-
-/***/ }),
-
-/***/ 1412:
-/***/ ((module) => {
-
-module.exports = bindActor
-function bindActor () {
-  var args = 
-        Array.prototype.slice.call
-        (arguments) // jswtf.
-    , obj = null
-    , fn
-  if (typeof args[0] === "object") {
-    obj = args.shift()
-    fn = args.shift()
-    if (typeof fn === "string")
-      fn = obj[ fn ]
-  } else fn = args.shift()
-  return function (cb) {
-    fn.apply(obj, args.concat(cb)) }
-}
-
-
-/***/ }),
-
-/***/ 3660:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-module.exports = chain
-var bindActor = __nccwpck_require__(1412)
-chain.first = {} ; chain.last = {}
-function chain (things, cb) {
-  var res = []
-  ;(function LOOP (i, len) {
-    if (i >= len) return cb(null,res)
-    if (Array.isArray(things[i]))
-      things[i] = bindActor.apply(null,
-        things[i].map(function(i){
-          return (i===chain.first) ? res[0]
-           : (i===chain.last)
-             ? res[res.length - 1] : i }))
-    if (!things[i]) return LOOP(i + 1, len)
-    things[i](function (er, data) {
-      if (er) return cb(er, res)
-      if (data !== undefined) res = res.concat(data)
-      LOOP(i + 1, len)
-    })
-  })(0, things.length) }
-
-
-/***/ }),
-
-/***/ 6029:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-/* unused reexport */ __nccwpck_require__(4976)
-/* unused reexport */ __nccwpck_require__(1412)
-exports.chain = __nccwpck_require__(3660)
-
-
-/***/ }),
-
-/***/ 9478:
+/***/ 9072:
 /***/ ((module) => {
 
 "use strict";
 
 
-module.exports = function (req, time) {
-	if (req.timeoutTimer) {
-		return req;
+class CancelError extends Error {
+	constructor(reason) {
+		super(reason || 'Promise was canceled');
+		this.name = 'CancelError';
 	}
 
-	var delays = isNaN(time) ? time : {socket: time, connect: time};
-	var host = req._headers ? (' to ' + req._headers.host) : '';
+	get isCanceled() {
+		return true;
+	}
+}
 
-	if (delays.connect !== undefined) {
-		req.timeoutTimer = setTimeout(function timeoutHandler() {
-			req.abort();
-			var e = new Error('Connection timed out on request' + host);
-			e.code = 'ETIMEDOUT';
-			req.emit('error', e);
-		}, delays.connect);
+class PCancelable {
+	static fn(userFn) {
+		return (...arguments_) => {
+			return new PCancelable((resolve, reject, onCancel) => {
+				arguments_.push(onCancel);
+				// eslint-disable-next-line promise/prefer-await-to-then
+				userFn(...arguments_).then(resolve, reject);
+			});
+		};
 	}
 
-	// Clear the connection timeout timer once a socket is assigned to the
-	// request and is connected.
-	req.on('socket', function assign(socket) {
-		// Socket may come from Agent pool and may be already connected.
-		if (!(socket.connecting || socket._connecting)) {
-			connect();
+	constructor(executor) {
+		this._cancelHandlers = [];
+		this._isPending = true;
+		this._isCanceled = false;
+		this._rejectOnCancel = true;
+
+		this._promise = new Promise((resolve, reject) => {
+			this._reject = reject;
+
+			const onResolve = value => {
+				this._isPending = false;
+				resolve(value);
+			};
+
+			const onReject = error => {
+				this._isPending = false;
+				reject(error);
+			};
+
+			const onCancel = handler => {
+				if (!this._isPending) {
+					throw new Error('The `onCancel` handler was attached after the promise settled.');
+				}
+
+				this._cancelHandlers.push(handler);
+			};
+
+			Object.defineProperties(onCancel, {
+				shouldReject: {
+					get: () => this._rejectOnCancel,
+					set: boolean => {
+						this._rejectOnCancel = boolean;
+					}
+				}
+			});
+
+			return executor(onResolve, onReject, onCancel);
+		});
+	}
+
+	then(onFulfilled, onRejected) {
+		// eslint-disable-next-line promise/prefer-await-to-then
+		return this._promise.then(onFulfilled, onRejected);
+	}
+
+	catch(onRejected) {
+		return this._promise.catch(onRejected);
+	}
+
+	finally(onFinally) {
+		return this._promise.finally(onFinally);
+	}
+
+	cancel(reason) {
+		if (!this._isPending || this._isCanceled) {
 			return;
 		}
 
-		socket.once('connect', connect);
-	});
+		if (this._cancelHandlers.length > 0) {
+			try {
+				for (const handler of this._cancelHandlers) {
+					handler();
+				}
+			} catch (error) {
+				this._reject(error);
+			}
+		}
 
-	function clear() {
-		if (req.timeoutTimer) {
-			clearTimeout(req.timeoutTimer);
-			req.timeoutTimer = null;
+		this._isCanceled = true;
+		if (this._rejectOnCancel) {
+			this._reject(new CancelError(reason));
 		}
 	}
 
-	function connect() {
-		clear();
-
-		if (delays.socket !== undefined) {
-			// Abort the request if there is no activity on the socket for more
-			// than `delays.socket` milliseconds.
-			req.setTimeout(delays.socket, function socketTimeoutHandler() {
-				req.abort();
-				var e = new Error('Socket timed out on request' + host);
-				e.code = 'ESOCKETTIMEDOUT';
-				req.emit('error', e);
-			});
-		}
+	get isCanceled() {
+		return this._isCanceled;
 	}
+}
 
-	return req.on('error', clear);
-};
+Object.setPrototypeOf(PCancelable.prototype, Promise.prototype);
+
+module.exports = PCancelable;
+module.exports.CancelError = CancelError;
 
 
 /***/ }),
 
-/***/ 8683:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+/***/ 8341:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var once = __nccwpck_require__(1223)
+var eos = __nccwpck_require__(1205)
+var fs = __nccwpck_require__(5747) // we only need fs to get the ReadStream and WriteStream prototypes
+
+var noop = function () {}
+var ancient = /^v?\.0/.test(process.version)
+
+var isFn = function (fn) {
+  return typeof fn === 'function'
+}
+
+var isFS = function (stream) {
+  if (!ancient) return false // newer node version do not need to care about fs is a special way
+  if (!fs) return false // browser
+  return (stream instanceof (fs.ReadStream || noop) || stream instanceof (fs.WriteStream || noop)) && isFn(stream.close)
+}
+
+var isRequest = function (stream) {
+  return stream.setHeader && isFn(stream.abort)
+}
+
+var destroyer = function (stream, reading, writing, callback) {
+  callback = once(callback)
+
+  var closed = false
+  stream.on('close', function () {
+    closed = true
+  })
+
+  eos(stream, {readable: reading, writable: writing}, function (err) {
+    if (err) return callback(err)
+    closed = true
+    callback()
+  })
+
+  var destroyed = false
+  return function (err) {
+    if (closed) return
+    if (destroyed) return
+    destroyed = true
+
+    if (isFS(stream)) return stream.close(noop) // use close for fs streams to avoid fd leaks
+    if (isRequest(stream)) return stream.abort() // request.destroy just do .end - .abort is what we want
+
+    if (isFn(stream.destroy)) return stream.destroy()
+
+    callback(err || new Error('stream was destroyed'))
+  }
+}
+
+var call = function (fn) {
+  fn()
+}
+
+var pipe = function (from, to) {
+  return from.pipe(to)
+}
+
+var pump = function () {
+  var streams = Array.prototype.slice.call(arguments)
+  var callback = isFn(streams[streams.length - 1] || noop) && streams.pop() || noop
+
+  if (Array.isArray(streams[0])) streams = streams[0]
+  if (streams.length < 2) throw new Error('pump requires two streams per minimum')
+
+  var error
+  var destroys = streams.map(function (stream, i) {
+    var reading = i < streams.length - 1
+    var writing = i > 0
+    return destroyer(stream, reading, writing, function (err) {
+      if (!error) error = err
+      if (err) destroys.forEach(call)
+      if (reading) return
+      destroys.forEach(call)
+      callback(error)
+    })
+  })
+
+  return streams.reduce(pipe)
+}
+
+module.exports = pump
+
+
+/***/ }),
+
+/***/ 9273:
+/***/ ((module) => {
 
 "use strict";
 
 
-var trigram = __nccwpck_require__(1286).trigram
-var collapse = __nccwpck_require__(8201)
-var trim = __nccwpck_require__(4065)
+class QuickLRU {
+	constructor(options = {}) {
+		if (!(options.maxSize && options.maxSize > 0)) {
+			throw new TypeError('`maxSize` must be a number greater than 0');
+		}
 
-var has = {}.hasOwnProperty
+		this.maxSize = options.maxSize;
+		this.onEviction = options.onEviction;
+		this.cache = new Map();
+		this.oldCache = new Map();
+		this._size = 0;
+	}
 
-exports.clean = clean
-exports.trigrams = getCleanTrigrams
-exports.asDictionary = getCleanTrigramsAsDictionary
-exports.asTuples = getCleanTrigramsAsTuples
-exports.tuplesAsDictionary = getCleanTrigramTuplesAsDictionary
+	_set(key, value) {
+		this.cache.set(key, value);
+		this._size++;
 
-// Clean `value`/
-// Removed general non-important (as in, for language detection) punctuation
-// marks, symbols, and numbers.
-function clean(value) {
-  if (value === null || value === undefined) {
-    return ''
-  }
+		if (this._size >= this.maxSize) {
+			this._size = 0;
 
-  return trim(
-    collapse(String(value).replace(/[\u0021-\u0040]+/g, ' '))
-  ).toLowerCase()
+			if (typeof this.onEviction === 'function') {
+				for (const [key, value] of this.oldCache.entries()) {
+					this.onEviction(key, value);
+				}
+			}
+
+			this.oldCache = this.cache;
+			this.cache = new Map();
+		}
+	}
+
+	get(key) {
+		if (this.cache.has(key)) {
+			return this.cache.get(key);
+		}
+
+		if (this.oldCache.has(key)) {
+			const value = this.oldCache.get(key);
+			this.oldCache.delete(key);
+			this._set(key, value);
+			return value;
+		}
+	}
+
+	set(key, value) {
+		if (this.cache.has(key)) {
+			this.cache.set(key, value);
+		} else {
+			this._set(key, value);
+		}
+
+		return this;
+	}
+
+	has(key) {
+		return this.cache.has(key) || this.oldCache.has(key);
+	}
+
+	peek(key) {
+		if (this.cache.has(key)) {
+			return this.cache.get(key);
+		}
+
+		if (this.oldCache.has(key)) {
+			return this.oldCache.get(key);
+		}
+	}
+
+	delete(key) {
+		const deleted = this.cache.delete(key);
+		if (deleted) {
+			this._size--;
+		}
+
+		return this.oldCache.delete(key) || deleted;
+	}
+
+	clear() {
+		this.cache.clear();
+		this.oldCache.clear();
+		this._size = 0;
+	}
+
+	* keys() {
+		for (const [key] of this) {
+			yield key;
+		}
+	}
+
+	* values() {
+		for (const [, value] of this) {
+			yield value;
+		}
+	}
+
+	* [Symbol.iterator]() {
+		for (const item of this.cache) {
+			yield item;
+		}
+
+		for (const item of this.oldCache) {
+			const [key] = item;
+			if (!this.cache.has(key)) {
+				yield item;
+			}
+		}
+	}
+
+	get size() {
+		let oldCacheSize = 0;
+		for (const key of this.oldCache.keys()) {
+			if (!this.cache.has(key)) {
+				oldCacheSize++;
+			}
+		}
+
+		return Math.min(this._size + oldCacheSize, this.maxSize);
+	}
 }
 
-// Get clean, padded, trigrams.
-function getCleanTrigrams(value) {
-  return trigram(' ' + clean(value) + ' ')
-}
-
-// Get an `Object` with trigrams as its attributes, and their occurence count as
-// their values.
-function getCleanTrigramsAsDictionary(value) {
-  var trigrams = getCleanTrigrams(value)
-  var index = trigrams.length
-  var dictionary = {}
-  var trigram
-
-  while (index--) {
-    trigram = trigrams[index]
-
-    if (has.call(dictionary, trigram)) {
-      dictionary[trigram]++
-    } else {
-      dictionary[trigram] = 1
-    }
-  }
-
-  return dictionary
-}
-
-// Get an `Array` containing trigram--count tuples from a given value.
-function getCleanTrigramsAsTuples(value) {
-  var dictionary = getCleanTrigramsAsDictionary(value)
-  var tuples = []
-  var trigram
-
-  for (trigram in dictionary) {
-    tuples.push([trigram, dictionary[trigram]])
-  }
-
-  tuples.sort(sort)
-
-  return tuples
-}
-
-// Get an `Array` containing trigram--count tuples from a given value.
-function getCleanTrigramTuplesAsDictionary(tuples) {
-  var index = tuples.length
-  var dictionary = {}
-  var tuple
-
-  while (index--) {
-    tuple = tuples[index]
-    dictionary[tuple[0]] = tuple[1]
-  }
-
-  return dictionary
-}
-
-// Deep regular sort on item at `1` in both `Object`s.
-function sort(a, b) {
-  return a[1] - b[1]
-}
+module.exports = QuickLRU;
 
 
 /***/ }),
 
-/***/ 4065:
-/***/ ((module, exports) => {
+/***/ 6624:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+const tls = __nccwpck_require__(4016);
+
+module.exports = (options = {}) => new Promise((resolve, reject) => {
+	const socket = tls.connect(options, () => {
+		if (options.resolveSocket) {
+			socket.off('error', reject);
+			resolve({alpnProtocol: socket.alpnProtocol, socket});
+		} else {
+			socket.destroy();
+			resolve({alpnProtocol: socket.alpnProtocol});
+		}
+	});
+
+	socket.on('error', reject);
+});
 
 
-exports = module.exports = trim;
+/***/ }),
 
-function trim(str){
-  return str.replace(/^\s*|\s*$/g, '');
+/***/ 9004:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+const Readable = __nccwpck_require__(2413).Readable;
+const lowercaseKeys = __nccwpck_require__(9662);
+
+class Response extends Readable {
+	constructor(statusCode, headers, body, url) {
+		if (typeof statusCode !== 'number') {
+			throw new TypeError('Argument `statusCode` should be a number');
+		}
+		if (typeof headers !== 'object') {
+			throw new TypeError('Argument `headers` should be an object');
+		}
+		if (!(body instanceof Buffer)) {
+			throw new TypeError('Argument `body` should be a buffer');
+		}
+		if (typeof url !== 'string') {
+			throw new TypeError('Argument `url` should be a string');
+		}
+
+		super();
+		this.statusCode = statusCode;
+		this.headers = lowercaseKeys(headers);
+		this.body = body;
+		this.url = url;
+	}
+
+	_read() {
+		this.push(this.body);
+		this.push(null);
+	}
 }
 
-exports.left = function(str){
-  return str.replace(/^\s*/, '');
-};
-
-exports.right = function(str){
-  return str.replace(/\s*$/, '');
-};
+module.exports = Response;
 
 
 /***/ }),
@@ -9666,273 +13896,6 @@ exports.getUserAgent = getUserAgent;
 
 /***/ }),
 
-/***/ 9428:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-const PassThrough = __nccwpck_require__(2413).PassThrough;
-const zlib = __nccwpck_require__(8761);
-
-module.exports = res => {
-	// TODO: use Array#includes when targeting Node.js 6
-	if (['gzip', 'deflate'].indexOf(res.headers['content-encoding']) === -1) {
-		return res;
-	}
-
-	const unzip = zlib.createUnzip();
-	const stream = new PassThrough();
-
-	stream.httpVersion = res.httpVersion;
-	stream.headers = res.headers;
-	stream.rawHeaders = res.rawHeaders;
-	stream.trailers = res.trailers;
-	stream.rawTrailers = res.rawTrailers;
-	stream.setTimeout = res.setTimeout.bind(res);
-	stream.statusCode = res.statusCode;
-	stream.statusMessage = res.statusMessage;
-	stream.socket = res.socket;
-
-	unzip.on('error', err => {
-		if (err.code === 'Z_BUF_ERROR') {
-			stream.end();
-			return;
-		}
-
-		stream.emit('error', err);
-	});
-
-	res.pipe(unzip).pipe(stream);
-
-	return stream;
-};
-
-
-/***/ }),
-
-/***/ 3194:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-"use strict";
-
-var url = __nccwpck_require__(8835);
-var prependHttp = __nccwpck_require__(6143);
-
-module.exports = function (x) {
-	var withProtocol = prependHttp(x);
-	var parsed = url.parse(withProtocol);
-
-	if (withProtocol !== x) {
-		parsed.protocol = null;
-	}
-
-	return parsed;
-};
-
-
-/***/ }),
-
-/***/ 6290:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-var rb = __nccwpck_require__(6417).randomBytes;
-module.exports = function() {
-  return rb(16);
-};
-
-
-/***/ }),
-
-/***/ 9197:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-//     uuid.js
-//
-//     Copyright (c) 2010-2012 Robert Kieffer
-//     MIT License - http://opensource.org/licenses/mit-license.php
-
-// Unique ID creation requires a high quality random # generator.  We feature
-// detect to determine the best RNG source, normalizing to a function that
-// returns 128-bits of randomness, since that's what's usually required
-var _rng = __nccwpck_require__(6290);
-
-// Maps for number <-> hex string conversion
-var _byteToHex = [];
-var _hexToByte = {};
-for (var i = 0; i < 256; i++) {
-  _byteToHex[i] = (i + 0x100).toString(16).substr(1);
-  _hexToByte[_byteToHex[i]] = i;
-}
-
-// **`parse()` - Parse a UUID into it's component bytes**
-function parse(s, buf, offset) {
-  var i = (buf && offset) || 0, ii = 0;
-
-  buf = buf || [];
-  s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
-    if (ii < 16) { // Don't overflow!
-      buf[i + ii++] = _hexToByte[oct];
-    }
-  });
-
-  // Zero out remaining bytes if string was short
-  while (ii < 16) {
-    buf[i + ii++] = 0;
-  }
-
-  return buf;
-}
-
-// **`unparse()` - Convert UUID byte array (ala parse()) into a string**
-function unparse(buf, offset) {
-  var i = offset || 0, bth = _byteToHex;
-  return  bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] + '-' +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]] +
-          bth[buf[i++]] + bth[buf[i++]];
-}
-
-// **`v1()` - Generate time-based UUID**
-//
-// Inspired by https://github.com/LiosK/UUID.js
-// and http://docs.python.org/library/uuid.html
-
-// random #'s we need to init node and clockseq
-var _seedBytes = _rng();
-
-// Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
-var _nodeId = [
-  _seedBytes[0] | 0x01,
-  _seedBytes[1], _seedBytes[2], _seedBytes[3], _seedBytes[4], _seedBytes[5]
-];
-
-// Per 4.2.2, randomize (14 bit) clockseq
-var _clockseq = (_seedBytes[6] << 8 | _seedBytes[7]) & 0x3fff;
-
-// Previous uuid creation time
-var _lastMSecs = 0, _lastNSecs = 0;
-
-// See https://github.com/broofa/node-uuid for API details
-function v1(options, buf, offset) {
-  var i = buf && offset || 0;
-  var b = buf || [];
-
-  options = options || {};
-
-  var clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq;
-
-  // UUID timestamps are 100 nano-second units since the Gregorian epoch,
-  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
-  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
-  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
-  var msecs = options.msecs !== undefined ? options.msecs : new Date().getTime();
-
-  // Per 4.2.1.2, use count of uuid's generated during the current clock
-  // cycle to simulate higher resolution clock
-  var nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs + 1;
-
-  // Time since last uuid creation (in msecs)
-  var dt = (msecs - _lastMSecs) + (nsecs - _lastNSecs)/10000;
-
-  // Per 4.2.1.2, Bump clockseq on clock regression
-  if (dt < 0 && options.clockseq === undefined) {
-    clockseq = clockseq + 1 & 0x3fff;
-  }
-
-  // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
-  // time interval
-  if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === undefined) {
-    nsecs = 0;
-  }
-
-  // Per 4.2.1.2 Throw error if too many uuids are requested
-  if (nsecs >= 10000) {
-    throw new Error('uuid.v1(): Can\'t create more than 10M uuids/sec');
-  }
-
-  _lastMSecs = msecs;
-  _lastNSecs = nsecs;
-  _clockseq = clockseq;
-
-  // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
-  msecs += 12219292800000;
-
-  // `time_low`
-  var tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
-  b[i++] = tl >>> 24 & 0xff;
-  b[i++] = tl >>> 16 & 0xff;
-  b[i++] = tl >>> 8 & 0xff;
-  b[i++] = tl & 0xff;
-
-  // `time_mid`
-  var tmh = (msecs / 0x100000000 * 10000) & 0xfffffff;
-  b[i++] = tmh >>> 8 & 0xff;
-  b[i++] = tmh & 0xff;
-
-  // `time_high_and_version`
-  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
-  b[i++] = tmh >>> 16 & 0xff;
-
-  // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
-  b[i++] = clockseq >>> 8 | 0x80;
-
-  // `clock_seq_low`
-  b[i++] = clockseq & 0xff;
-
-  // `node`
-  var node = options.node || _nodeId;
-  for (var n = 0; n < 6; n++) {
-    b[i + n] = node[n];
-  }
-
-  return buf ? buf : unparse(b);
-}
-
-// **`v4()` - Generate random UUID**
-
-// See https://github.com/broofa/node-uuid for API details
-function v4(options, buf, offset) {
-  // Deprecated - 'format' argument, as supported in v1.2
-  var i = buf && offset || 0;
-
-  if (typeof(options) == 'string') {
-    buf = options == 'binary' ? new Array(16) : null;
-    options = null;
-  }
-  options = options || {};
-
-  var rnds = options.random || (options.rng || _rng)();
-
-  // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
-  rnds[6] = (rnds[6] & 0x0f) | 0x40;
-  rnds[8] = (rnds[8] & 0x3f) | 0x80;
-
-  // Copy bytes to buffer, if provided
-  if (buf) {
-    for (var ii = 0; ii < 16; ii++) {
-      buf[i + ii] = rnds[ii];
-    }
-  }
-
-  return buf || unparse(rnds);
-}
-
-// Export public API
-var uuid = v4;
-uuid.v1 = v1;
-uuid.v4 = v4;
-uuid.parse = parse;
-uuid.unparse = unparse;
-
-module.exports = uuid;
-
-
-/***/ }),
-
 /***/ 2940:
 /***/ ((module) => {
 
@@ -9973,49 +13936,13 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 3522:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-var path = __nccwpck_require__(5622);
-var osHomedir = __nccwpck_require__(3406);
-var home = osHomedir();
-var env = process.env;
-
-exports.data = env.XDG_DATA_HOME ||
-	(home ? path.join(home, '.local', 'share') : null);
-
-exports.config = env.XDG_CONFIG_HOME ||
-	(home ? path.join(home, '.config') : null);
-
-exports.cache = env.XDG_CACHE_HOME || (home ? path.join(home, '.cache') : null);
-
-exports.runtime = env.XDG_RUNTIME_DIR || null;
-
-exports.dataDirs = (env.XDG_DATA_DIRS || '/usr/local/share/:/usr/share/').split(':');
-
-if (exports.data) {
-	exports.dataDirs.unshift(exports.data);
-}
-
-exports.configDirs = (env.XDG_CONFIG_DIRS || '/etc/xdg').split(':');
-
-if (exports.config) {
-	exports.configDirs.unshift(exports.config);
-}
-
-
-/***/ }),
-
 /***/ 1713:
 /***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(2186);
 const { Octokit } = __nccwpck_require__(5375);
 const github = __nccwpck_require__(5438);
-const franc = __nccwpck_require__(9554);
-const translate = __nccwpck_require__(6505);
+const translate = __nccwpck_require__(5178);
 
 // **********************************************************
 const token = core.getInput('token');
@@ -10030,9 +13957,6 @@ async function run() {
       context.payload.action == 'opened'
     ) {
       const isPR = context.eventName === 'pull_request';
-      let number;
-      let title;
-      let body;
       if (!isPR) {
         number = context.payload.issue.number;
         title = context.payload.issue.title;
@@ -10077,13 +14001,10 @@ async function run() {
 }
 
 function checkIsEn(body) {
-  const result = franc(body);
-  if (result === 'und' || result === undefined || result === null) {
-    core.warning(`Some error. [check: ${check}] [${body}]`);
-    return false;
-  }
+  var en = /^[a-zA-Z0-9. -_?]*$/;
+  const result = en.test(body);
   core.info(`[CheckIsEn] [${body} is ${result}]`);
-  return result === 'eng';
+  return result;
 }
 
 run();
@@ -10096,22 +14017,6 @@ run();
 
 module.exports = eval("require")("encoding");
 
-
-/***/ }),
-
-/***/ 7943:
-/***/ ((module) => {
-
-"use strict";
-module.exports = JSON.parse("{\"Latin\":{\"spa\":\" de|os |de | la|la | y | a |es |ón |ión|rec|ere|der| co|e l|el |en |ien|ent|cho|ech|ció|aci|o a|a p| el|al |a l|as |e d| en|ona|na |da |s d|nte| to|ad |ene|con| su| pr|tod| se|ho | pe|los|per|ers| lo| ti|cia|o d|n d|a t|cio|ida|res| es|tie|ion|rso|te | in|do |to |son|dad| re| li|e s|tad|que|pro|est|oda|men|nci| po|a e| qu|ue | un|ne |s y|lib|n e|su | na|s e|ia |nac|e e|tra|or | pa|ado|a d|nes|se |ra |a c|com|nal|por|er |a s|ual|rta| o |ber|les|one|rá |des|s p|dos|sta|ser|ter|ar |era|ibe|ert|ale| di|a a|nto|l d|del|ica|hos|o e|io |imi|oci|n c|s n|ant|cci|re |e c|y l|ame| as|mie|enc| so|o s|ici|las|par|s t|ndi| cu|ara|dic|bre|una|tos|ntr|l p|s l|e a|pre|cla|o t|a y|omo|man|y a|ial|so |nid|n l|n p| al|mo |e p|s s| ig|igu|gua|uma| fu|nta|y e|soc|o p|no |ali|ten|s a|ade|hum|ran|l t|n t|s c|ria|dis|d d| ca|cas|das|ada|ido|l e|y d|tiv|vid|mbr|a i| hu|fun|und|eli|s i| ma|nda|e i| ha|uni|nad|a u|sar|s o| ac|die|qui|rac|ndo| tr|ind| me|ori|tal|odo|ari|lid|esp|o y|tic|ca |un |esa|cti|cua|ier|ta |lar|ons|ont|iva|ide|med|edi|d y|ele|nos|ist|l m|s h|ecc|sti|tor| le|seg|cie|r e|n a|ito|ios|rse|ie |o i|a o|o l|pen|tri|rim|l y|ami|lig|erá|o c|rot|ote|mat|ond|ern|n s|e h|an |ect|lo |ibr|ple|sus|us \",\"eng\":\" th|the| an|he |nd |and|ion| of|of |tio| to|to |on | in|al |ati|igh|rig|ght| ri|or |ent|as |ll |is |ed |in | be|e r|ne |ver|one|s t|all|eve|t t| fr| ha| re|s a|ty |ery|d t| pr| or|e h| ev| co|ht |e a|ng |his|ts |yon|be |ing|ce |ryo| sh|n t|fre|ree|men|her|pro|has|nal|sha|es |nat|y a|for| hi|hal|n a|f t|nt | pe|n o|s o| fo|nce|d i|er |e s|res|ect|ons|ity|l b|ly |e e|ry |an |e o|ter|ers|e i| de|cti|hts|eed|edo|dom| wh|ona|re | no|l a| a |e p| un| as|ny |d f| wi|nit| na|nte| en|d a|any|ere|ith| di|e c|e t|st |y t|ns |ted|sta|per|th |man|ve |om |nti|s e|t o|ch | ar|d o|equ|soc|oci|wit|ess|ote|ial|rea| al| fu| on| so|uni|oth| ma| ac| se|enc| eq|qua|ual|ive|lit|thi|int| st|tat|r t|t a|y o|e w|hum|uma|und|led|cia|l o|e f| is|le |f h| by|by | la|ali|are|y i|con|te | wo|eas| hu|ave|o a|com| me|ic |r a|ge |f a|ms |whe| ch|en |n e|rot|tec|tit|s r| li|o t|ple|s d|rat|ate|t f|o o|wor| fa|hou|dis|t i|nda|nde|eli|anc|rom| su|cie|no |ary|inc|son|age|at |oms|oun|nst|s w|d w|ld |n p|nta|l p|tan|edu|n s|duc|itl|tle|whi|hic|ich|ble|o s|imi|min|law|aw |gni|iti| ot|g t|eme|se |e b|ntr|tra| pu|d n|s i|act|e d|ort| he|r s|cou|unt|pen|ily| ag|ces|rit|it |din|s f|hav|ind| ed|uca|cat|ren|ien|tho|ern|d e|omm\",\"por\":\"os |de | de| a | e |o d|to |ão | di|ent|da |ito|em | co|eit|as |dir|ire|es |rei| se|ção|ade|a p|e d|s d|dad|men|nte|do |s e| pe| pr|dos| to| da|o e| o |a a|o a|ess|tod|con| qu|que| do|e a|te |al |res|ida|m d| in|er | ou|sso| re| na|a s| po|uma| li|cia| te|pro|açã|e e|ar |a d|a t|ue | su| es|ou |s p|a e|tos|des|com|ra |ia |tem|no | pa|ame|nto|e p|is |est|oda|na |s o|tra|ões|das|pes|soa|o s|s n|o p|ser|s a| à |ais| as| em|o o|e o|ber|oa |o t|ado|a c|sua|ua | no|ter|man|e s| os|s s|e n|çõe|ica|lib|ibe|erd|rda|nci|odo|nal|so |ntr|or |ura|s t|o c|ona| so| ao|hum|ual|sta|ma |ons|a n|era|e t|pre|ara|r a|por| hu|cio|o à|ria|par|ind|e c|ran|gua| um|o i|a l|s c|ndi|m a| en|und|nos|e r|ano|aci|ion|soc|oci|nid|sen|raç| ac|ndo|nsi| ig|igu| fu|fun|m o|nac|per|ali|rec|ime|ont|açõ|int|r p| al|um | me|a i|s h|nta|rio|cçã|ere|pel|l d|a o| ex|pri|uni|ese|ada| ma|ant|ide|nda| fa|am |e f|lid|io |ém |ita|iva|omo|o r|esp|a f|m p|lic|ca |s f|naç|pod|ode|ver|a q|r e|tad|tiv|vid|e l|o q|r d|e i|seu|eli|mo |ecç|s i|ial|ing|ngu|s l| vi|ist|ta |eci|ênc|a m| ca|der|ido|ios| un|dis|cla|qua|se |ati|sti|r o|sid|roc| tr|sem|o n|ao |dam|ens|tur|ico|rot|ote|tec|sse|l e|ena|for| pl| ni|nin|gué|uém|não|ela|tro|ros|ias\",\"ind\":\"an |ang| da|ng | pe|ak | ke| me| se|ata|dan|kan| di| be|hak|ber|per|ran|nga|yan|eng| ya| ha|asa|men|gan|ara|nya|n p|n d|n k|a d| at|tan|at |ora|ala| ba|san|erh|ap |ya |rha|n b| ma|a s|pen|g b|eba|as |aan| or|ntu|uk |eti|tia|tas|aka|set|ban|n s| un|n y| te|ter|iap|tuk|k m|beb|bas|lam| de|n m|k a|keb|am |i d|ama|unt|ah |dal|end|n h|p o|den|sa |dak|mem|ika|ra |ebe|pun|ri |nda|ela|ma | sa|di |a m|n t|k d|ngg|n a|tau|asi| ti|eri|gar|man|ada|al |um |un |ari|au |lak|a p|ta |a b|ngs|ole| ne|neg|dar|ers|gsa|ida|leh|ert|k h|ana|sam|sia|i m|ia |dap|era|dil|ila|tid|eh |h d|atu|bat|uka|aha|a a|ai |g d|lan|tu |t d|uan| in|ena|har|sem|ser|kat|erl|apa|erb|uat|na |kum|g s|ung|nan|emp|rta|l d|mas|ega|n u| hu|ka |eni|pat|mba|adi| su|aga|ent|nta|huk|uku|rga|ndi|ind|i s|ar |sua|aku|rus|n i|ni |car|si |nny|han| la|in |u d|lah|ik |gga|ua |ian|ann|lai|usi|emb|rik|mer|erk|arg|emu|dun|dip|nas|lua|aru|ema|a u|min|mat|aya|kes|rak|eka|a t|rka|a k|iba|rbu|rma|yat|ini|ina|anu|nus|mua|s p|ut |lin| ta|us |ndu|da |pem|ami|sya|yar|nak|das|k s|kel|ese|mel| pu|ern|a n|aik|uar|t p|g p|ant|ili|dik| an|tin|ing|ipe|tak|iny|ain| um| ja|aks|sar|rse|aup|upu|seo|eor|g m|g t|dir|pel|ura|bai|aba|erd|eca|h p|kep|m m|jam|umu|mum\",\"fra\":\" de|es |de |ion|nt |et |tio| et|ent| la|la |e d|on |ne |oit|le |e l| le|s d|t d|ati|e p|roi|it | dr|dro| à | co|té |ns |te |e s|men|re | to|tou| l’|con|que|les| qu| so| pe|des|son|ons|s l| un| pr|ue |s e| pa|e c|ts |t l|onn| au|e a|e e|eme| li|ant|ont|out|ute|ers|res|t à| sa| a |ce |per|tre|a d|er |cti| en|ité|lib| re|en |ux |lle|rso| in| ou|un |à l|nne|nat|une|ou |n d|us |par|nte|ur | se| d’|dan|ans|s s|pro|e t|s p|r l|ire|a p|t p|its|és |ond|sa |a l|nce|é d| dé|nal|aux|omm|me |ert| fo| na|iqu|ect|ale| da| ce|t a|s a|mme|ibe|ber|rté|s c|e r|al |t e| po|our|com|san|qui|e n|ous|r d| ne|fon|au |e o|ell|ali|lit| es| ch|iss|tes|éra|air|s n| di|ter|ui | pl|ar |aut|ien|soc|oci|tra|rat|êtr|int|été|pou|du |est|éga|ran|ain|s o|eur|ona|rs |anc|n c|rai|pri|cla|age|nsi|e m|s t| do|bre|sur|ure|ut | êt| ét|à u|ge |ess|ser|ens| ma|cia|l e| su|n p|a c|ein|st |bli| du|ntr|rés|sen|ndi|ir |n t|a s|soi| ég|ine|l’h|nda|rit| ré|t c|s i|il |l’a|e q| te|é e|t s|qu’|ass|ais|cun|peu|ée |tat|ind|t q|u d|n a| ac|tés|idé|l n|ill| as|’en|ign|gal|hom|nta| fa|lig|ins| on|ie |rel|ote|t i|n s|sse| tr|n e|oir|ple|l’e|s é|ive|a r|rec|nna|ssa| mo|s u|uni|t ê|pré|act| vi|era|sid| nu|e f|pay|’ho|cat|leu|ten|rot|tec|s m\",\"deu\":\"en |er |der| un|nd |und|ein|ung|cht| de|ich|sch|ng | ge|ie |che| di|die|ech|rec|gen|ine|eit| re| da|ch |n d|ver|hen| zu|t d| au|ht | ha|lic|it |ten|rei| be|in | ei| in| ve|nde|auf|ede|den|n s|zu |uf |ter|ne |fre| je|jed|es | se| an|n u|and|sei|run| fr|at |s r|das|hei|hte|e u|ens|r h|nsc|as |nge| al|ere|hat|men|lle|nte|rde|t a|ese|ner| od|ode| we|g d|n g|all|t u|ers| so|d d|n a|nen|te |lei| vo|wer| gr|ben|ige|e a|ion| st|ege|le |cha| me|ren|n j|haf|aft| er|erk|bei|ent|erd| si|kei|tig|eih|ihe|r d|len|on |n i|lun| gl|chu|e s|ist|st |unt|ern|tli|gem|ges|ft |ati|tio|gru|end|ies|mit|eic|sen|r g|e e|ei | wi|n n| na|sta|gun|ite|n z|r s|gle|chl|lie|mei|em |uch|nat|n w|urc|rch|de |hre| sc|sse|ale|ach|r m|des|n e|spr|t w|r e|d f| ni| du|dur|nie| mi|ied|fen|int|dar|e f|e g|geh|e d|f g|t s|ang|ste|hab|abe|h a|n v|alt|tz |hli|sic|her|nun|eme|ruc|taa|aat|he |e m|erf|ans|geg| is|tun|pru|d g|arf|rf |n o|ndl|ehe|e b|h d|d s|dig|arb|wie|r b| ih|r w|nsp|ber|t i|r a|r v|igk|gke|bes|n r|str|gew|rbe|ema|e v|n h| ar|rt |ind|n f|ins|esc|ieß|ken|ger|eru|ffe|ell|han|igu|man|sam|t g|ohn|hul|rst|tra|rli|lte|hut|utz|ls |ebe|von|r o|e i|nne|etz|d a|rn |isc|sel| fa|one|son|et |aus|r i|det|da |raf|iem|e z|lan|sow\",\"jav\":\"ng |an |ang| ka|ing|kan| sa|ak |lan| la|hak| ha| pa| ma|ngg|ara|sa |abe|ne | in|ant|n k| ng|nin|tan|nga| an|ata|en |ran|man| ba|ban|ane|ong|ra |n u|hi |nth| da|ake|ke |thi|ung|uwo|won|ngs| uw|asa|ben|gsa|sab|ana|aka|beb|nan|a k|nda|g p|adi|at |awa|san|ni |pan| be|dan|eba|g k|e k|ani|bas|g s|dha|aya| pr|gan|mar|di |ya |wa |g u|n s|ta |a s| wa|arb|e h| na|a n|a l|n p|a b|yan| ut|n n|ah |asi| um|g d|as |han|g n| tu|dar|rbe|wen|ggo| di|dak|mat|sar|eni| un|und|iya|a a|k h|kab|ka |be |uma|art|ora|ngk|i h|ala|rta|n b| or|n m|gar|kar|yat|al |g b|na |a m|n i|ega|ina|kak|g a|pra| ta|gge|ger|ena|kat|kal|a p|i k|tum|oni|nya| ne|adh|g m|duw|uwe|dad|kas| pe| si|aga|uta|k k|pa |and|nun|i l|ngu|go |nal| ke|n a|uju|anu|ama|a d|i p|t m|er | li|per|iba|min|sak|apa|war|ha |pad|ggu|gay|ras|taw|ind|eng|a u|we | bi|n l|ali|awi|neg|awe|bak|g t|e p|ndu|bis| ku|ih |ase| me|iji|pri|bad|eh |i t|uwa|ron|ndh|mra|ar | pi|ur |isa|mba|sin|aba|g l|ebu|n t|ika|men|ini|lak|a w|arg|ku |ami|ayo|a i|nas|liy|e s| we|rib|ngl| ik|k b|e d|rga|rap|tin| lu|aku|bed|k a|h k|yom| as| nd|eka|il | te|umu|rak|ut |dil|i w|i s|jin|kon|jud|wae|ae |kap|uha|uto|tow|gka|umr|n d| ti|eda|gon|ona| mi|ate|mum|um |but|r k|wat|si |k p|k l|gaw\",\"vie\":\"ng |̣c |́c | qu| th|à |nh | ng|̣i | nh| va|và|̀n |uyê| ph| ca|quy|yề|ền|̀i | ch|̀nh| tr| cu|ngư|i n|gươ|ườ|ời|́t | gi| co|ác|̣t |ó |c t|ự |n t|cá|ông| kh|ượ|ợc| tư| đư|đươ|iệ|ìn|́i | ha| đê|i đ|có|gia| mo|mọ|ọi|như|pha|n n|củ|ủa|̉a |̣n | ba|n c|̀u |̃ng|ân |ều| bi|hôn|ất|tự|g t| vi|n đ|đề|t c| la| ti|nhâ| đô|u c|hiê|bả|ên | tô|hân| do|do |́ q|ch |̀ t| na|́n |ới|ay | hi|àn|̣ d| đi|g n|hay|há| mô|ội|hữ|uố|ốc|n v|̣p |́p |quô|thư| ho|nà|ị |́ch|̀ng|ào|̀o |̉n |ôn |i c| hô|c đ|i v|khô|c h|i t|g v| đa|mộ|ột|́ng|tro|ữn|ướ|ia |̣ng|ản|̉ng|h t|hư |ện|ộc|g c|ả | đo|̉ c|là|c c|n h|n b|hà|iế|̣ t| cô| vê|ức|t t|ã |hộ| vơ|iên|g đ|̉i | bâ|̀y |ớc|a c|̉m | sư|áp|ật|viê|vớ|hươ|tha|ực|h v|ron|ong|g b|qua|iá|̀ c|ể |h c|a m|ế |uậ|ảo|̉o |sự|o v|cho|phâ|n l| mi|hạ|côn|o c|̃ h| cư|ục|̀ n| hơ|i h|c q|á |ại|bị|cả|c n| lu|ín|h đ| xa|g h|độ|bấ| nư|m v|thô| tâ|tộ|hả|oà|áo|́o |ốn|ệ |thu|mì| du|̣ c|xã|c p|ải| hư|́ c|ho |y t|o n|n p|ở |hứ|iể|y đ|hấ|ối|chi|án|ề |́ t|ệc|cũ|ũn|tiê|hợ|ợp|o h|hoa|ày|ai |ết|̉ n|c b|đó| đâ|luâ|đố|kha|về|̉ t|c l|̀ đ|i b|nươ| bă|dụ|họ| ta|thê|tri|hí|́nh|g q|p q|n g|o t|c g|hự|yên|i l|́u |an | cơ\",\"ita\":\" di|to |ion| de| in|la |e d|ne |di | e |zio|re |le |ni |ell|one|lla|a d|rit|o d|itt|del| co|dir|iri|ti |ess|ent| al|azi|tto|te |i d|i i|ere|tà | pr|ndi|e l|ale|ind|o a|e e|gni|e i|nte|con|li |a s| un|i e|ogn|men|uo | og| ne|idu|ivi|e a|div|vid|duo| ha|tti| es|a p|no | li|za |pro|ato|all|sse|per|ser| so|i s| la| su|e p| pe|a l|na |ibe|ali| il|il |e n|lib|ber|e c|ia |ha |che|e s|o s|o e| qu|in |nza|ta |nto| ri|he |o i|oni|sta| o | a |o c|nel|e o|naz|so |o p|o h|gli| po|i u|ond|i p|ame|ers|i c|ver|ro |ri |era|un |lle|a c|ua | ch|ssi|una|el |i a|ert|rtà| l |a a|tat|ant|dis|ei |a e| si| ad|à e|nal| da| le|est|pri|nit|ter|ual| st|ona|are|ità|dei|cia|gua|anz|tut| pa|al | ed| re|sua|ono| na|uni|raz|si |ita|com|ist|man|ed |der|ad |i o|enz|soc|que|res| se|o o|ese| tu|i r|io |ett|à d|on |dic|sia|rso|se |uma|ani|rio|ari|ial|eri|ien|ll |oci|rat|tra|ich|pre|qua|do | um|a t|i l|zza|sci|tri|er |ico|pos|a n|ara|o n|son|att| fo|fon|nda|utt|par|nti|sti|nes|n c| i |chi|hia|iar|int|sen|e u|str|uzi|ati|a r|rop|opr|egu| me|ra |ann| ma| eg|ost|bil|isp|ues| no|ont|rà |tta|ina|ezz|l i|tal| ra|gio|nno|a i|d a|i m|ria| cu|ore|e r|izi|dev|tan|lit|cie|non|sso|sun|ite|ica|l d|ide|lia|cos|i n|nta|a f| is|l p|art\",\"tur\":\" ve| ha|ve |ler|lar|ir |in |hak| he|her|bir|arı|er |an |eri| bi|ya |r h|ak |ın |eti|iye|ası| ka|yet| ol|tle|ını|ara|eya|akk|kkı|etl|sın|na |esi|de |ek | ta|nda|ini| bu|rın|ile|vey|kla|rin|ne |e h|ır |ine|e k|ına|sin|dır|ere| sa|n h|ama|ınd|nın|mas| ge|le |ı v| va|erk|rke|lma|nma|lan| te|tin|akl|rle|nin|en |e m|ard|a v|ill| de|let|da |k h| me|aya| şa|k v| hü|riy|e b|kın|nı |et |dan|san|e d|var|rdı|kes|si |mil|e a| il|hür|ana|ret|dir| se|şah|mes|irl| mi|ola|bu |ürr|rri|n e|n i|kı |n v|mek| ma|mak|lle|lik|nsa|li |ı h| iş| ed| iç|n b|kar| ba|ala| hi|eli|ulu|a h|eme|re |e s|ni |e t|n k|a b|iş |rak|evl|e i|etm|ik |r ş|ar | eş|olm|un |hai|aiz|izd|zdi|im |dil|n t|nde| gö|ilm|lme|tir|mal|hiç|e g|unm|ma |ele|a i|e e|eşi|şit|ık |mel| et| ko|n s|ahs|i v|sı | an|el |yla|la |ili|r v|rı |anı|ede|ket| ya|lun|may|se |ins|tim|edi|siy|t v|içi|çin|a k|nla|r b|miş|i b|yan|ame|tme| da|bul|mem|eml|eke|mle| ki| ke|lek| in| di|din|uğu|n m|it |ser|ind| mü|arş|rşı|es |ger|a s|len| ay| ku|vle|erd|eye|ye |oru|nam|ken| uy|a m|ün |r a|i i|tür|i m|kor| so|al |hsı|cak|rme|nun|lam|eni|dev|rde|ri |mey|a d|i o|kim|ims|mse|end|ndi|rek|ahi|il |hay|lık|e v|iç |sız| öğ|öğr|ğre| bü|büt|ütü|tün|anl|alı|şma|k g|at |den|i s\",\"pol\":\" pr|nie| i |ie |pra| po|ani|raw|ia |nia|go |wie| do|ch |ego|iek|owi| ni|ści|ci |awo|a p|do | cz|ośc|ych| ma|ek |rze|prz| na|wo | za| w |ej |noś|czł|zło|eni| je|wa |łow|i p|wol|oln| lu|rod| ka|wsz| wo|lno|y c|ma |każ|ażd|ny |dy |o d|stw|owa|żdy| wy|rzy|ecz|sta| sw|e p|twa|czn|dzi|i w|szy|zys|na |ów |lub|ub |a w|k m|est| sp|kie|wan|ają| ws|pow|e w|spo|nyc|pos|rac|a i|cze|yst|ać |neg|sze|ne |mi |aro|ńst| ja|jak|o p|pod| z |acj|obo| ko|i i|nar|i n| ro|awa| ró|zy |dow|zen|zan|zne|zec|jąc|iej|cy |rów|nej|odn|nic|czy|o s|no |ony|aw |i z|ówn|odz|jeg|o w|edn|o z|aki|o o|a s| st|ni |bez|owo| in|ien|eńs|ami| or|dno|zie|mie| ob|kol|stę|tęp|i k|ez |w c|poł|ołe|łec|ym |orz|jed|o u| os|olw|lwi|wia|ka |owy|owe|y w| be|o n|jes|wob|wyc|a j| od|zna|inn|zyn|aln|któ|cji|ji |się|i s|raz|y s|lud| kr|ją |cza|zes|nik|st |swo|a o|sza|ora|icz|kra|a z|h p|i o|ost|roz|war|ara|że |lni|raj| si|ię |e o|a n|em |eka|stk|tki|pop|ą p|iec|ron|kow|odo|w p|peł|ełn|ran|wni|dni|ows|ech|gan|dów|zon|pie|a d|i l| kt|tór|ini|ejs| de|dek|ywa|iko|z w|god|ków|adz|dst|taw| to|trz|e i|ich|dzy|by |bod|iu |nan|h i|chn|zeń|y z|ano|udz|ieg|w z|ier|ale|a k|z p|zaw|ekl|kla|lar|any|du | zw| go|o r|to |az |y n|ods|ymi|ju |och|nau|wej|i m\",\"gax\":\"aa |an |uu | ka|ni |aan|umm|ii |mma|maa| wa|ti | fi|nam|ta |tti| na|saa| mi|fi |rga|i k|a n| qa|dha|iyy|oot|mir|irg|in |raa|qab|a i|kan|a k|isa|chu|akk|amu|aba|a f|huu|kam| ta|kka|amn|ami| is|a a|mni|att| bi|yaa|ach|yyu|yuu|ee |miy|wal|waa|ga |aat|ata|a e|tii|oo | ni| ee|moo|ba |ota| ak|a h| ga|i q| dh|daa|a m|haa|ama|i a|a b|yoo|ka |kaa| hi|aas|sum|u n| uu|arg| hu|man| ha| ar| ke| yo| ba|ees|i i|taa|uuf|uf |ada|iin|i f|rra|ani|a w|i w| ad|da |nya|a u|irr|na |hun|isu|hin| ma| ho|ess|und|i m|i b|bar|is |een|ana|mu |bu |i d| sa|f m|add|sa |eeg| ir|i h|n h|u a|aad| la|al |ala|udh|ira|hoj|kee|goo| ya|ook|abu|gac|mum|as |itt|nda|see|n t|n i|uum|n k|ra |rgo|ara|a q|ums|muu|mat|a d|nii|sii|ssa|ati|a g|asu|biy|yya|eef|haw| da| mo|tum|a t|u h|gar|uma|a s|n a|n b|baa|awa|nis|eny|u y|roo|mmo|gam|sat|abs|n m|tee|nna|eer|bir| ku| qo|bil|ili|lis|otu| to|kko|n w|ali|rum|msa|rka| fu|amm|gaa|aaf|era|ya | ye|yer|ero|oti|kun|un |jii|ald|i y|ant|suu|n d|tok|okk|ame|mee|nni|tan| am|lii|n u|aru|lee|gum|ddu|i g|u m|oji|ura|lda|lab|ila|laa|aal|n y|ef |chi|uud| qi|qix|dar|ark|dda|gal|u b| ji|jir|han|art|arb|asa|ega|tam|hii|ffa| se| bu|faa|ndi|n g|bat|oka|kar| mu|mur|aja|uun|naa|sad|a l|lam|ken|enn|u f|egu\",\"swh\":\"a k|wa |na | ya| ku|ya | na| wa|a m| ha|i y|a h|a n|ana|ki |aki|kwa| kw|hak| ka| ma|la |a w|tu |li |a u|ni |i k|a a|ila| ki|ali|a y|ati|za |ifa|ili| mt|ke | an|kil|kat|mtu|ake|ote|te |ma |ika|ka |we |a s|yo |i n|fa |ata|e k|ama|zi |u a|amb|ia |kut|ina|u w|azi| yo|i z|asi| za|o y|au |yak|uhu|ish|tik|ha |wat| au|u k|e a|mba|hur| bi|ara|sha|uru|mu | as| hi|u n|hi |ru |tai|aif|a b|hal|ayo|cha| uh|i h|yot| ch|awa|chi|atu|e n| zi|u y|ngi|mat|shi|ani|e y|sa |eri|ja |uli| am|ele|i a|end|o k| sh|ima|ami|oja|a t| ta| nc|nch|any|a j|ham|wan|ada|uta|i w|iki|ra |moj|ii |ari|kuw|uwa|ye | la| wo|o h| sa|ti |wak|she|iwe|kan|nay|eza|iri|iwa|fan|bu |i m|uto|lim|ao |her|ria|wen|kam|di | ja|jam| ni|ing|a l|wot|bin|amu|dha|o w|ahi|kaz|zo |da |adh|si | hu|ri |bil|e m|aka|e w|ang|ini|agu|sta|a z|kup|kul|lin|ind|ne |aji|zim|nya|kus|har|nye|asa|nad|dam|rik|iyo| ba|bar| nd|nde|ita|ta |gin|ine|uu |mwe|maa|ndi|kuf|o n|u h|i s|uzi|nga| ye|tah|sil|imu| ut|azo|esh|uni|taa|aar|rif|hii|wez|uba|wam|ush|mbo|bo |ibu|lez|wal|saw|kos|e b|a c| si|aza|tok|oka|tak|eng|dhi|ala|hir|yan|izo|ten|guz| mw|liw|ndo|oa |laz|aha|uku|ian|eli|mam|ua |ndw|zin|aba|pat|del|i b|ufu|nda|a i|mai|ais| um|man|ba |u m|kuh|zwa|sia|tan|taw|e i\",\"sun\":\"an |na |eun| ka|ng | sa|ana|ang| di| ha|ak |nga|hak|un |ung|keu| ba|anu| an|nu |a b| bo| je|a h|ata|asa|jeu|ina| ng|ara|nan|gan|sa |a k|awa|ah | na|n k|kan|aha|ga |a s|a p|ban| ma|a n|bog|oga|ing|sar| ku| pa|man|a a|ha |san|bae|ae |din|g s|sah|tan|aga|ra | si|ala|kat|n s| pe|ma | ti|per|aya|sin| te| pi| at|n a|aan|pan|lah|gar|n n|u d|ta |eu |kum|ari|ngs|ran|a d|n d|n b|gsa|a m|wa |ama|ku |ike|taw|n p|k h|al | ja|eba|bas|a t|at |ika|beb|asi|atu|pik|kab|una|nda|a j|e b|n h|nag|oh |aba|en |ila|g k|boh|aku|ngg|art|rta|abe|ar |ima|n j|um |di |usa|udu|geu|k a|adi|ola|sak|aca|u s|rim| ay|car|h k|aka|eh |teu|tin| me| po|ti |awe|ngt|sac|jen|u a|uma|ent|k n|gaw|law|dan|uku|ur |teh|h s|bar|aru|ate| hu|nar|n t|jal|aja|dil|ere|iba|ieu|pol|nya|ut |wan|are|mas|ake|upa|pa |yan|huk| so|nus|ngk| du|ura|tun|ya |mpa|isa|lan| ge| mi|u m|kal|uan|ern|tut|tay|h b|hna|kaw|kud|us |und|ena|n m|han|nte|lak| ie|ula|ka | ke|rup| tu|u k| nu|g n|umn|mna|h p|g d|u n|gta|ayu|yun|mba|gam| be|du | ta| wa|wat|eus|a u|ren|umu|i m|ri |eri|rik|u p|dit|ali|h a|k k|k d|ngu|rua|ua | da|amp|men|sal|nge| ra|sas|nas|ona| bi|ame|sab|alm|lma|ami|min|il |kas|ter|mum|rak|mer|ksa|k j|yat|wil|mar|eur|g b|war|gal|kaa|we |tur|e a|r k\",\"ron\":\" de|și | și|re | în|are|te |de |ea |ul |rep|le |dre|ept|e d| dr|ie |e a|ate|în |tul|ptu| sa| pr|e p|or | pe|la |e s|ori| la| co|lor| or|ii |rea|ce |tat|au | a |ați| ca|ent|ale| fi|ă a| ar|a s|ice|per|ers|uri| li|a d|al |ric| re|e c|e o|nă |i s|ei |tur|men|con| să|lib|ibe|ber|să |rso|tăț|ilo| ac|sau|pri|ăți|i a|i l|l l|car| in|ter|ție|lă |că |tea|a p|ții|soa|oan|ri |nal|in | al|e ș|i î|ril|ană|pre|ui |uni|e f|se |ile|ere|i d|ita| un|ert|e î|a o|ia |i c|fie|ele|ace|i ș|nte|tă |pen|ntr| se|a l|pro| că|ire|ală|eni|est| ni|ă d|lui|a c| cu|n c| nu|ona|sal| as|eri|naț|ând|ră | om| su|ecu|i p|rin|e n|ici|i n|nu |oat|inț|ni |tre| to|tor|ări|soc|oci|ste| na|iun| di| po|l d|va |ega|gal| tr|ă p|ulu|n m|ă î|a a|rec|res|i o| so|fi |sta|sa |uie| au|lit| ce| mo|din|ces|nic|int|nd |i e|cla|ara|ons| îm| eg|a î|rel|e l|ial|i f| fa|ță |leg|e e|tar|ra |ă f|a f|rar|iei|nit|ă c|tru|ru |u d|act|at |rtă|ți |nta|nde|eme|ntu|ame|reb|ebu|bui|toa|l c| o |ion|ă ș|dep|ali|ât |ili|ect|ite|i i|pli|n a|dec|rta|cu |împ|cți|ane|e r|văț|nt |u c|ța |l ș|cia|țio|ită|bil|r ș|poa|ca | st|t î|tri|riv|man|ne |omu|rie|rit|înv|nvă|ăță|mân|mod|od |rot| ma|cur|u a|oar|uma|a ș|rii|era| ex|tra|iil|ani|țiu|lic|t s|nța|eze|ta | va\",\"hau\":\"da | da|in |a k|ya |an |a d|a a| ya| ko| wa| a |sa |na | ha|a s|ta |kin|wan|wa | ta| ba|a y|a h|n d|n a|iya|ko |a t|ar |ma | na|yan| sa|ba |asa| za| ma|hak|a w| ka|ata|ama|akk|i d|a m| mu|su |owa|a z|iki| ƙa|nci|a b| ci|ai | sh|kow|anc|nsa|a ƙ|a c| su|shi|ka | ku| ga|ne |ani|ci |e d|kum|uma|‘ya|cik| du|uwa|ana| ‘y|i k|ali|ɗan| yi|ada|ƙas|aka|kki|utu|n y|hi |a n| ad| do| ra|mut|tar| ɗa| ab|nda|a g|man|nan|ars|cin|ane|and|n k|min|yi |i a|ke |sam|ins|a i|nin|yin|ki |tum|ni |aɗa|ann|e m|ami|dam|za |en |kan|um |yar|mi |duk|oka|n h| ja|dai|kam|ewa|mat|i y|nna|abi|ash|n s|waɗ|ida|am |re |ga |sar|kok|oki|una|mas|ra |i b|dun|uni|abu|a ‘| ƙu|n j|awa|ce |a r|e s|ara|a ɗ|san|li |aba|cew|she|ƙun|kar|ari|m n|niy| ai|aik|u d|kko|buw|n w| la| ne|rsa|zam|omi|rin|hal|bub|ubu|aya|a l|han|ban|o n|are|add|i m|zai| hu|me |bin|tsa|sas|i s|ake|n ‘| fa|kiy|n m|ans|dom| ce|r d|uns|ƙar| an|jam|ɗin|i w| am|n t|wat|ika|yya|nce|har|ame|gan|hen|n b|n ƙ|dok|fa | ki|yak|ray|abb|din|on |bay|aid|ayi|aci|dan|aur|ili|u k| al|rsu| ts|ukk|kka|aye|nsu|ayu|bba| id|ant|n r|o d|sun|tun|unc|sha| lo|lok|kac|aif|fi |gam|aga|un |lin|aɗi|yuw|aja|fan|i i|ace|uka|n i|war|riy|imi|sak| ir|yay|tab|bat|mar| iy|sab|nta|afi|o a| ak|bi \",\"fuv\":\"de | e |e n|nde| ha|la |e e|akk| ka| nd|ina| wa|al |hak|na | in|ndi|ɗo |kke|ii |di |aad|ade|um |ko |i h|ala| mu| ne|lla|ji |wal| jo|mum| fo|all|neɗ|eɗɗ| le| ko|e h|kal|taa|re |aaw| ng|e k|aa |e w|ee |ley|jog|ke |e m|laa|nnd|eed|e l|ɗɗo|aag|ol | ta|o k|kee|gu |ti |dee|a j|ogi|waa|m e|am |le |eji|ond|nga|gal| wo|ɓe |ɗe |e d|awa|gii|ede|eej| re|gol|aan| go|agu|i e|oti|ann|fot|eyd|e t|ɗee|naa|oto|ydi| po|pot|maa| he|een|i n|enn|ni |taw|a i|e j|e f|a k|goo|to |dim|der|ele| aa|o n| de| fa| ba|ngu|oot|er |dir|won|oor| sa|ngo|ka |ndo|i k|a n|ay |ota|a f|ima|e ɓ| to|i f|a e|tee|ren| ja|i w|wa |o f|fof|ore|eyɗ|yɗe|a w|too|ma |o t|awi|i m|kam|o e|hay|and|nan|ñaa|e y|of |eel|e s|hee|aak|nka| do|l e|e g|ira| la| so| ɓe|a t|dii|e i| te|tin|e r|e p|o w|ani|aar|are| na|ral| ña| yi|awo| ya|so |aam|i l| ho|oo |ooj|nng|nge|woo| ma|faw|kaa| mo|u m|und|dow|gaa|en |o i| li|lig|igg|e a|ita|e b| o | nj| mb|o h|nda|ude|ɗi | no|haa|a h| fe| di|iin|iti|tii|yan| tu|tuu|inn|ama|baa|iiɗ|den|tal|aaɗ|yim|imɓ|njo|edd|ine|nee| je|jey|lli|lit|uug|ugn|no |bel|go | hu|ank|je |do |guu| da|mii| ke|a d|ano|non|l n|y g| ɗu|gna|mɓe|ete|i a|wit|jaŋ|aŋd|ŋde| su|alt| ɗe|nna|a a| ɓa|ɓam|amt|tde|ago|l h|m t|ind|ɗɗa|aga|eɗe|ow \",\"bos\":\" pr| i |je |rav| na|pra|na |da |ma |ima| sv|a s|nje|a p| da| po|anj|a i|vo |ko |ja |va | u |ako|o i|no | za|ju |e s| im|avo|ti |sva|ava|o n|i p|li |ili|i s|ost|van|vak| ko|ih |ne |a u| sl|nja|jed| ne| dr|koj|ije|i d| bi|stv|im |u s| il|slo|lob|obo|bod| je| ra|pri|sti|vje| ob|a d|om |se | su|e i|a n| se|i i|dru|enj| os|a b|e p|voj|cij|u p|o d|a o|raz|su |i n|uje|ova|u i|edn| nj| od|i u|u o|lo |ran|lju|ni |jen|ovo|aci|iti|o p|a k|oje|žav|nos|dje|e o|bra|pre|a j|pro|ji |i o| ka|nih|bit|jeg| tr|tre|bud|u z|og |sta|drž|rža|e d|u n|pos|mij|elj|svo|reb| bu|avn|jem|ija|e b|ći |aro|rod|red|ba |a z|šti|ka |de |em |aju|iva|lje|ve |e u|jel|jer|bil|ilo| iz|eni|du | do| st|a t|za |tu |nar|tva|odn|gov| sa|nim|m i|e n|vim| ni|u d|o k|oji| sm|dna|ući|ist|i m|eba|ičn|vno| dj|oda|nak|e k|an |nov|sno|stu|aln|nst|eno|eđu|čno|ani|nom|olj|tiv|nac|ave|i b|smi|čov|ovj|osn|a r|nap|ovi|ans|dno|jan|nju|oja|nog|m s|edi|ara|oj |nu |kri| kr|odu|iko|lja|sto|rad|nik|tup| čo|jek|tvo| vj| mi|tel|obr|živ|tit|una|ego|pod|sam|o o|rug| op|nji|din| mo|vu | ov|h p|udu|riv|dst|te | te|a č|vni|svi|i v|ina|i t|ite|o s|u u|m n|zaš|ašt|itu|ak |dni|nic|nič|odr|vol|avi|g p| ta|rim|kla|e t|ao | vr|akv|tno|mje|duć|ona|ada|obi|eds\",\"hrv\":\" pr| i |je |rav|pra|ma | na|ima| sv|na |ti |a p|nje| po|a s|anj|a i|vo |ko |da |vat|va |no |o i| za|ja |i s|avo| im|sva| u |i p|e s| bi|tko|ju |o n|li |ili|van|ava| sl|ih |ije| dr|ne |ost|jed| ne|u s|ova|nja| os| da| ra| ko|slo|lob|obo|bod|atk|i d|koj|iti| il|stv|pri|im |om | ob| je| su|vje|i u|i n|e i|i i| ka|bit|dru|ati|se |voj|i o|a b|a o|ćen|ući|a n| se|o p|enj|edn|a u|sti| mo|ćav|lo |dje|raz| od|ran|u p|rod|a k|ni |su |mij|u i|svo|ako|a j|aro|drć|rća|pos|eno|e p|pre| nj|e o|ćiv|nar|ji |oje|e n|eni|nih|oda|ći |nov|bra|ra |nim|a d|avn|og |aju|iva|ovo|nos|i b|bil|sno|za |ovi|red|tva|a z|mor|ora|ka |sta|jem|pro|jen|u o|cij|ve |e d|jel|jer|ilo| do|osn|i m|odn| iz|nom|lju|em |lje| ni|aci|oji|o d|du | st|nit|elj|u z|jeg| sa|o o|m i|vno|vim|uje|e b|oj | dj|rad| sm|dna|nak|e k|an |stu|o s|tit|tu |aln|nst|eću|dno|gov|ani|juć|u d|m s|e u|a ć|u u|nju| bu|bud|te |ćov|ovj|tvo|a r|nap|šti|ist|ću |ans|m p|jan|nić|olj|u n|edi|ara|nu |o k|udu|ona|smi|odu|ada|oja|tup| ćo|jek| vj|ina| mi|tel|i v|obr|zaš|ašt|una|dni|ija|pod|sam|duć|rug| op| ta|nji|e m|oso|sob|h p|itk|svi|ite|elo|itu|meć|jim|odr|di |vol|avi|nog|štv|rim|din|kla|će |ao |tno| ći|kak|akv|ave|nac|lja|sto|obi| te|to |vi |ovn|vni|odi|lji\",\"nld\":\"en |de |an | de|van| va| en| he|ing|cht|der|ng |n d|n v|et |een|ech| ge|n e|ver|rec|nde| ee| re| be|ede|er |e v|gen|het|den| te|ten| op| in|n i| ve|lij| zi|zij|ere|eli|ijk|oor|ht |te |ens|n o|and|t o|ied|ijn| on|ke |op |eid| vo|jn |id |ond|in |sch| vr|n z|rde|aan| ie|aar|ren|men|rij|hei|ord|hte|eft| we|ft |n g|n w|or |n h|eef| me|wor|vri|t r|hee|al |le |of |ati| of|g v|lle|e b| wo|eni| aa|voo|r h|n a| al|nd |e o|n t|ege|erk|t h|jke| na|sta|at | da|e e|end|nat| st|nge|ste|e g|tie|n b|om |die|e r|r d|erw|ij |dig|e s| om|wel|t e|ige|ter|gel|ie |e m|re |t d| za|ers|ijh|jhe|d v|zal|nig|nie|bes|ns |e w|est|d e|g e|e n|ele| do|ge |vol|che|e d|ig |gin|eze|nst|ona|eke|cha|hap|dat|lke|e a| di|waa| to|min|jk |tel| gr|len|eme|lin|elk|ard|doo| wa|eve|ven|n s|str|gro|han|del|ich| ov|ove|n n|t v|tio|ion|wet|it |gem|ijd|met| zo|uit|aat|dez|ze |rin|e i|all|st |ach| ni|toe|n m|ies|es |taa|per|hed|heb|ebb|bbe|ien|sti| ma|nte|ale|kin|nin|mee|daa|el |ben|ema|man|s e|e h|esc|her|lan|ang|ete|g o|wer|is | er|pen|nsc|beg|igd|t g|ont|iet|tig|ron|tin|p v|r e|rwi|wij|ijs| hu|erm|nal|bij|eer|edi|ite|t a|t w|d o|naa|weg|iem|g d|teg|ert|arb|als|d z|tan|tre| la|ar |ame|js |rmi|t b|app|rwe| bi|t z|ker|eri|ken| an\",\"srp\":\" pr| i |rav|pra| na|na | sv|ma | po|je |da |ima|a p|ja |a i|vo |nje|ko |va |anj|ti |i p|ako| u |a s| da|avo|ju |i s|ost| za|o i|sva| im|vak|o n|e s|ava|nja| sl| ko|om |no | ne|ne |li |u s| dr|ili|a n|slo|obo|koj|ih |lob|bod|im |sti|stv|a o| il| bi|pri|a u| ra| je|og |jed|enj|e p|u p|van|ni |a d|i u|edn|iti|nos|a k|o d|ova|pro| su|i i| os|ran|sta|dru|e i|cij|se |rod| ob|i o|aju|e o|i n|ove| de|aci| ka|ovo| ni| od|ve | se|i d| st|m i|voj|avn|uje|eni|ija|dna|žav|u i|red|su |nov|odi|tva|e b|oja|što|lju|u o|ara|a b|ji |drž|rža|odn|jan|nim|poš|ošt|a j|ka |jen| ov|u u| nj|du |ave|osn|sno|šti|aro|raz|bit|a z|u z|de | iz|nih|o p|u d|e d|pre|vu |u n|lja| tr|tu |eđu|nar|gov|svo|bez|ičn|lje|e n|za |vno|lo |oji| sa|to |an |nak| me|čno|đen|vim|nac|oda|ani|me |iko|nik|ika|e k|pos| kr|tre|reb|nst|stu|e u|ku | do|ašt|tit|aln|dno|jeg|nom|olj|nog|m s| vr|o k|oj |čov|ans|ovi|o s|bra|te |tav|tup|eno|živ|zaš|em |i m|dni|šen|var|riv|rug|vol|avi|tan|štv|kao|ao | li|st |ilo|nju|sme|o j| sm| čo|odu|vre|dst|od |a t|kri| bu|bud| ve|ver|a r|m n|del|tvo|međ|oje|jem|m p|avl|vlj|ego|u v|pod|ena|ugi|la |jav|por| op|ruš|ušt|kom|edi|ba |kla| mo|oju|i b|kak|akv|rad|nu |vek|rim|gla|juć|ude|vni|eba|e r|svi|i v|itu|ter\",\"ckb\":\" he| û |ên | bi| ma|in | di|na |maf|an | ku|ku | de| ji|xwe|her|iya| xw|ya |kes|kir|rin|iri| ne|ji |bi |yên|afê|e b|de |tin|ke |iyê|e h|es |ye | we|er |di |we |i b|ê d|erk| na|î û| an|ina| be|yê |eye|rke|î y|nê |kî |diy|ete|hey|hem| ci|eke| li|wek|ber|fê |n d|li | bê| se|yî | te|ne |rî |sti|net|tew|yek|af |hev|yan|n b|kar| ki|re |e k|wî |i h| ew|n û|û b|aza|n k| wî| mi|î b|dan|e d|î a|ekî|a m| az|zad|mir|iro|rov|nav|n h|ser|est|a w|ara|bin|ewe|anê|adi|tê |be |emû|mû | yê| ya|ta |ast|tî |ev |ewl|s m|n m|wey| tu|wle| bo|bo | tê|n j| me|ê h|din|ras|î d|n n| da|n w|bat|wed|ema|ê b|cih|st | ge|iye|ing|ar |în |r k| ke| pê|îna|î h|ekh|khe|vî |ana|par|û m|ûna|civ|vak|n e|dî |nge|geh| ye|ê t|ê k|û a|fên|hî |e û|av |eyî|bûn|erb|î m|bik|ê m|a x|iva| re|e n|eyê|vê |ane|man|nên|ela|end| pa|erî|n x| ta|jî |ika|kê |a k|f û|f h|e j|î n|ra |ehî|tiy|tên|û h|a s|rbe|bes|mî |ari|eza| ni|nek|n a|ov |i n|erw|rwe|erd|aye|e e|riy| a |ike|ê x|ovî|û d|inê|etê|tem|yet|eta|ek |ê j|a n|e t|i d|zan|bê |anî|nîn| ra|ama|ere| hi|i a|tuk|uke|bib|lat|awa|u d|ibe|xeb|atê|i m|mal|nda|ewa|a d|a b|arî| ba|edi| hî|hîn|rti| za|ist|e m| wi|mam| şe| qa|qan|anû|nûn|asî|han| ên|a g|u h|tu |dew|let|are|ine|pêş|êr |e a|wel|ger\",\"yor\":\"ti | ní|ó̩ | è̩|ní | lá|̩n |o̩n|é̩ |wo̩|àn | e̩|kan|an |tó̩| tí|tí | kò|ò̩ | àw|̩tó|è̩ | àt|è̩t|bí |e̩n|àti|lát|áti| gb|lè̩| ló| ó |s̩e|àwo|gbo|̩nì|n l| a | tó|í è|ra | s̩|n t|ò̩k|tó |sí |kò̩|̩ka|o̩ | sí|ìyà|orí|ílè|ì k|̩‐è|dè |yàn|ni |̩ à|ún | or|èdè|jé̩|ríl|è̩‐|‐èd|í à|àbí|n à|nì |ò̩ò|̩ò̩|í ó| tà|tàb| ti|̩ t|jo̩|̩ l|̩e | wo|í ì|nìy|ó n| jé|ló | sì|kò |n è|wó̩|n n| bá|̩ s|rè̩|sì | fú|fún|í a| pé|̩ni| òm| kí|gbà| èn|ènì|pé |in |ba |òmì|nir|ira|ìí |ràn| ìg|ìgb|n o|bá |mìn|ìni|gba|kí |n e| rè|e̩ |̩ n|un |̩ p| o̩|í ò|nín|nú |fi |gbé|yé | ka|ínú|a k|bé̩|mo̩| fi|̩ ì|í i|ó s|i l|wà |o̩d|̩dò|dò̩|̩ o|bò |dá |i ì|bo̩|hun|i ò|o̩m|̩mo|̩ k|áà |̩wó|bo |àgb|ló̩| ò̩|ó j| bí| oh|ohu|í k|n s|írà|bà |ara| ìb|ogb|pò̩|ú ì|yìí|rú |kó̩|ó̩n|i t|̩ ò| lè|lè |̩ e|à t|à l|bog|a w|gé̩| yó|yóò|óò |ò l|̩gb|ò̩r|̩ y|í w|̩ f|í t| wà|ó̩w|yí |ó b|̩ a|ìké|i n|i è|láà|àbò|fin|wùj|ùjo|n k|í e|é̩n| òf|òfi| mì|mìí|ìír|jú |rin|̩é̩|i j|ó t| ar| ir| ná|náà| ìk|̩ b|i s|ú à| yì|kàn|irú|rí | i |è̩k|̩kó|fé̩|é à|i o|s̩é|̩ m| ìd|è̩d|̩dá|i à|àwù|à n|ú è|wù | èt|áyé|í g|í o| mú|a l|láb|ábé|̩è̩|ìn | kú|láì| àà|i g|bé |níp|ípa| ìm|níg|ígb|wò̩|báy|ké̩|mú |í n|de |è̩s|mó̩| dá|i a|dó̩|ó̩g| ni|i p| wó|ayé|ùn |̩ w|a n|n f|n ì|je̩|ò t|n g\",\"uzn\":\"lar|ish|an |ga |ar | va| bi|da |va |ir | hu|iga|sh |uqu|bir|shi|huq|quq|gan| ha| bo|ini|ng |a e|r b|ni | ta|lis|lik|ing|ida|oʻl|ili|ari|nin|on | in|ins|adi|nso|son|iy | oʻ|lan| ma|har|dir|hi |kin|ash|i b|boʻ| yo| mu|uqi|dan|ila|qig|ega|r i|qla|oʻz| eg|a b| er|erk|kla|qil|oli|ki |gad| ol|nli|lga|at |i h|a o|rki|oki|osh|lig|igi| qa|yok|ib |las|n m| ba| qi|n b|ara|atl|ri |iya| sh|ham|ala|lat|bil|in |r h|bos|a t|siy|a y|cha|n o|a h|ik |a s|inl|a q|yat|nis| et|eti|osi|h h|i v|ani|tla|til|mas|ʻli|asi|ati| qo|i m|ris|im |a i|uql|arn|rni|qar|ha |gi | da|sha|n h|i o|rch|mla|li |i t| xa|arc|bar|ʻz |hun|a a|rla| bu|a m|lin|lib|taʼ| tu| as|h v|tib|aro|un |tga|r v|ikl| be|mum|n q|ali| te|sid| to|mat|amd|mda|tas| ke|shu|lla|shg|hga|n e| ya|dam|aml|oya|xal|hla|ola|iri|irl|ill|rga|iro|tis| de|umk|mki| eʼ|ten|eng|rda| is| sa|gin|imo|tar|ush|ur |ayo|rak| so|alq| ki|aza|k b|oda|oʻr|a k|tni|ʻlg|n v|hda|nda|shq|hqa|zar|miy|i q| mi|mil|r t| si|ak |ada|rat|or |kat|era|siz|am |ch |aso|sos|yot|atn|shl|n t|nid|y t|ana|ti |rin|asl|bu |sin|dav|ilg|as |i y|ech|nga|lak|h k|ino|ʼti|gʻi|muh|a v|bor|uch|lim|a u|uni|lli|n i|uri|si |i e| ka| ch|a d| ja|ami|qon|na |rig|lma|ker|avl|vla|i a|dek|ekl|liy|aka| em|ema|eʼt\",\"zlm\":\"an |ang| ke| se|ng | da|ada|dan|ara| pe|ak | be|ran|ber| me|ah |nya|hak|per|n s|ata|ala|ya |a s|kan|asa|lah|n k| di|da |aan|gan|nga|dal|erh| ma|n d|eba|rha|a p| ha|kep|pad|yan|ap |ama| ba| ya|nda| te|ra |a b|tia|man|eng|a d|ora|men|iap|n p|ter|epa|san| or|eti|pen| ad| at|n a|a a|h b|set|tan|sia|tau|n t|n b|ta |dak| sa|sa |at |au |ela|apa|pa |beb|bas|p o|h d|n m|keb|end|aka|ega|a k|am |sam|ana|gar|k k|ban|ole|leh|neg| un|lam|di |g a|eh |n y|aha|han|a m|eri|any|ma | ti|a t|uan|mas|ngs|atu|seb|ebe|ing|ian|car|bag| ne|mem|kes|mat|gsa|ia |ika|i d|nan|asi|und| la|epe|ert|agi|emb|na |ers| de|emu|pem|ngg|anu|i m|ind|erk|ung|n h|tu |gi |kla|g b|pun|iha| in|nus|usi|tin|al |si |as |akl|dap|erl|era|sec|eca|i s|lan|bar|k m|ena|aya| as|sas|nny|rta|sem|awa| su|bol|rat|den|ini|ni | ta| he|hen| an|tar|g m|ai |kem|adi|had|in |ti |i k| bo|uka| ap|g t|ka |ann|ema|g s|ain|k h|rka|ri |n i|aga|un |ses|dun|enu|emp|elu|lai|kat|ent|nta|rsa|iad|ua |dia|ira|a n|mpu|ntu|uk |mel|k d|har|ker|dil|mar|h m|aja|ila|k a|mba|lua|i a|rak|uat|jua|rma| pu|t d|rga|i p|uma|ser|esi|ar |esa|nak|bah|rli|lin|ndu|dar|ari|ese|l d|ant|ngk| ol|sua|g d|ati|tuk|erm|saa|erj|rja|kea|raa|gam|g u|tik|ida|sek|eka|sat|i b|mbe|unt|dir|iri\",\"ibo\":\"a n|e n|ke | na|na | ọ | bụ|nwe| n |ere|ọ b|re |nye| nk|ya |la | nw| ik| ma|ye |e ọ|ike|a o|nke|ụ n|a m| ya|a ọ|ma |bụl|ụla|e i| on| a |iki|kik|ka |ony|ta |bụ |kwa|i n|a i| nd|di |a a|wa |wer|do | mm|dụ |e a|any|ha | ga| ok|e m| ob|he |ndi|e o|a e|ite|ọ n|rụ |hi |ga‐|mma|wu | dị|aka|ara|che|oke|o n|we |n o| ih|mad|adụ|obo|bod|odo|a g|te | ez|hị | ka|ụta|be | an|akw|zi |a‐e|dị | oh|gba|nya|u n|ihe| ak|me |i m|ala|ri | ọz|ghi|ohe|her| mb|ba | nt| si| iw|weg|pụt|ra |iri|chi|ụrụ|rị |zọ |oro|ro |iwu|a‐a|ụ ọ|ụ i| eb|ebe|e ị|a y| in|ezi|kpa|kpe|inw|mba|sit|ịrị|ile|le | ha|e e|bi |n e|chị| en| e |i ọ|asị|mak| ni|nil|ghị|si |ide|a u|o i|i o|i i|apụ|a s|e y|u o|ụ m|ahụ|hụ |a ụ|nkw|edo|n a|ru |ụ o|ozu|enw|ọzọ|kwu|gid|sor|egh|yer|tar|n i|pa |eny|uru|kwe|toz|ị o| mk|ama|de |uso|tu | im|ime| me|i a|ịch|ọ d| ịk|obi| ọn|hed| ọr|ọrụ| to| ch|gas|wet|mkp| kw|osi|a d| nh|nha|ọnọ|nọd| al| nc|nch|sir| o |n u|sịr|eta|u ọ|ị m|n ụ| us|nọ | ot|otu| gb|ọdụ|nwa|o m| ag|ali|lit|ọta|ega|ị n|e k|e s|ji |a k|ikp|ọch| ug|ban|ekọ|pe |nta|agb|na‐|n ọ|hu |i e|e g|a b|zu |chọ|u a|kwụ|ram|esi|uch|onw| nọ|ị k|u m|eme|wan|e h|dịg|ịgh|hịc|ugw|gwu| di|ich|cha| og|okp|kpu| nn|zụz|zụ |i ị|o y|ach| ng|pụr|ị e|a h|meg|nat|uwa\",\"ceb\":\"sa | sa|ng |ang| ka|an | pa|ga | ma|nga|pag| ng|a p|on |kat|a k|od |ug | ug|g m| an|ana|n s|ay |ata|ung|ngo|a m|atu|ala|san|ag |tun|g s|g k|d s|god|a s|ong| mg|mga|g p|n u|yon|pan|a a|usa|ing|tag|tan|una|mat|ali|aga|g u|han| us|nan|y k|man|ina|non|kin| na|lan|syo|a b|asa|nay|a i|n n| ta|awa|nas|taw| o |nsa|gaw|a n|agp|dun|iya|ban|isa|was| ad|adu| gi|ili|ini|asy|bis|nag|g a|a t|o s| bi|nah|lin| ki|al |sam|lay|ahi|nal| ba|ano| wa|wal|asu|agt| di|yan|ama|a u|n a|ags| iy|gan|n k|kan|him|kag|ya | un|gpa|kas|aha| su|g t|awh|wha|gsa|l n|agk|gka|a g|gla|kal|gal|ran|sud|ud |imo|d u|aba|aka|ika|ig |ngl|ipo|g d|ara|g n|uka|uns|uta|d n|og |i s|y s|kau|li |n o|aki|o p|kab| og|ot |mta|gik| si|n m|gpi| la|g i|aho|ayo|iin|ok |awo|hat|o a|gon|ip |a w|apa|lip|na |a h|bal|la |ad | ga| ti| hu|uba|wo |ati|uga|hon|hin|ma |sal| ub|agb|gba|nin| bu|buh|uha|t n|ahu|may|pin|as |ni |mak|ihi|abu|uma| in|say|d a| pi|dil| ni|ins| pu|agh|at |hun|but|aug|lak|bah|sak|o u|mal|s s|os |amt|t s|pod|sos|ngp|lam|aod|ila|a d|ami|k s|tin|ura|mo |agi|tra| at|bat|aan|ulo|iha|ha |n p|kar|oon|sya|ona|aya|in |inu| hi|it |agl|amb|mbo|mag|a l|ho |lao| al| il|iko|ngb|mah|lih|g b|gta|gtu|y p|rab|ato|tar|nab| re| so|osy|yal|aw |gda\",\"tgl\":\"ng |ang| pa|an |sa | sa|at | ka| ng| ma|ala|g p|apa| na|ata|pag|pan| at| an|ay |ara|ga |a p|tan|g m| mg|mga|n n|pat| ba|aya|n a|na |ama|g k|kar|awa|a k|lan|rap|gka|nga|n s|g n|g b|a a|aha| ta|agk|gan|asa|tao|aka|yan|ao |a m|may|man|kal|ing|nan|a s| la|aga|ban|ali|g a|ana|y m|kat|san|kan|pam|g i|ong|mag|a n|baw|o a|wat| y |isa|lay|y k|t t|ila|g s|in |kas|o y|aan| ay|ina|t n|t p|wal|ag |una|yon| it| o |nag|tay|pin|ili|ans|lal|ito|any|nsa|kak|a i|lah|mam|nta|nya|gal|hay|to |ant|aba|ran|agt|on |han|agp|kap| ga|t s| wa|gaw|o m|ya |as |g t|lip|y n|hat|g l|ung|ngk|no |gpa|lag|gta|t m|wa |yaa|ari|sal|a l|kai|pap|lin| pi|ita|ahi| is| di|agi|ipi|bat|mak|pun|a b|y s|aki|tat|la |hin|pah|yag|gay|o n|ags|iti|di |i n|sas| si|t a|al |a t|ika|mal|s n|ipu|t k|ais|hal|i a|sap|lit|od |ihi|alo|y p|ani|ig |par|ap | ip|tas|gin|gga|nin|uma|gsa|ano|ira|a g|nah|uka|syo| bu|ini|o s|nap|ngi|o p| ha|a h|mah|a o|li |ipa|uha|asy|lam|iba|aru|mba|g e|usa|lim|sam|pil| da|kin|duk|sin|dai|aig|igd|gdi|dig| tu|d n|ba |nas|pak|iga|kil|n o|nak|ad |lig|git|lab|ma |kab|nar|tag| ed|edu|aho|buh|and|nda|mas|pas| ib|it |ri |lun|ula|agb|g g|ain|pul|ino|gi |sar|g w|abu|s a|api|nil|iyo|siy|iya|anl|uli|aun|agg|amb|g d|ati| li|i m\",\"hun\":\" sz| a |en | va|és | és|min|ek | mi| jo|jog|ind|an |nek|sze|ság| az|gy |nde|ala|sza|den|az |a v|val|ele| el|mél|oga|egy|n a| eg|ga |zem|zab| me|emé|van|int|tel|aba|bad|tet|ak | te|tás| ne|gye|t a|ény|ély|tt |n s|ben|zet|ség|lam|meg|nak|ni |ete| se|lyn|yne|s a| al|let|z e|ra |et |agy|sen|eté|k j|tek|mel|kin|ok | ki|ez |hoz|oz |n m|re |vag|ett|emb|mbe|es | kö| le|nem|ell|em |ely|hog|ogy|s s|gok|atá|k a|nt |köz| ho|z a|hez|el |len|yen|ásá|ads|dsá|tés| em|a m|a s|nte| ál|k m|ás |a t|szt|áll|a h|y a|ogo|sem|ber|ban|enk|nki|nye|lap|t s|ese|ame|nyi|k é|ágo|ló |ág |t m|on | vé|i m|ami|ébe|s e|lat|lla|ly |mén|fel|tat|eri|lő |a n|eki|n v|yes|emz|mze|lle|a a| cs|át |kül|elő|l a|nd | ke|ég |i é|lis|vet|éte|ért|rés|yil|ésé|enl|szo| am|tar|art|alá|elé|a j| ny|koz|het|ész|ja |lem|nlő|ri |i j|s é|éle|ól |aló|kel| ha|ges|zás|más|s t|tár|s k|t é|vel|tko|zés|ése|se |tő |ot |ott|sít| fe|n k|lek|tte|olg|áza|ssá|e a|eve|szá|ti |n e|ül |zte|ána|zto|tos|árs|os |k k|eze|leh|ehe|t n|tes|kor|atk|del|t k|tot|ány|ége|fej|i v| né|ház|leg|k e|ll |nev|is |ába|t t|véd|éde|d a|zer|ere|kif|ife|téb|ny |ai | bi|biz|izt|i e|sül|lt |zat|at |elm| ar|arr|rra|sel|t e|ágá|s n|csa| mu|nél|it |esz| há|zas|ass|üle| ta|nyo|alk\",\"azj\":\" və|və |ər |lar| hə|in |ir | ol| hü|hüq|üqu| bi|quq|na |lər|də |hər| şə|bir|an |lik| tə|r b|mal|lma|ası|ini|r h|ən |şəx|əxs|qla|arı|a m|dir|ali|aq |uqu| ma|ilə|ın |una|yət| ya|ara|ikd|ar |əri|əsi|r ş|rin|əti|dən|nin|n h| az|yyə|sin| mü|tin|ni |zad|iyy| mə|ərə|mək|ün |nda|ət |i v|ını|nın|ndə|ə a|aza|rın|qun|olu| et| qa|lıq|ilm|kdi|lə |ə y|ək |lmə|ına|ind|olm|xs |mas|sın|lun| in|ə b|da |n t|əmi| bə|adl|dlı|n m|nə |q v|ya |tmə|bər| on|ə h|əya|sı |nun|etm|dan|inə|maq|un |raq|ə v| va|n a|n b|rlə|ə m|si |əra|n i|ınd| öz|anı|nma|ama|rı |ığı|li |il | al|ala| di|ə d|ik |irl|ins|lət|a b|bil|ıq |müd| sə|ə i|nı |nla|ələ|dil|alı|ə e|unm|n v|ola|asi|üda|ili| də|nsa|san|uql|ə o|xsi| he|uq |ətl|həm|əni|eyn|u v| da|tər|min|yin|kil|dır| bu|lan|iş | ha|məs| ki|mi |lığ|ə q|q h|i s|daf|afi|fiə|r v| iş| əs|sos|osi|sia|xal|alq| ta| as| ed|bu |heç|eç |rə |yan|ı h|kim|iyi|ı o|ina|siy|əsa|sas|a q|yar|lı |tün| is|ist| so|al |n ə|ifa|əmə|ə t|mil|ill|lıd|ıdı|ır |ədə|ıql|liy|tlə|a h|məz| bü|büt|ütü|iya|iə | üç|üçü|çün|t v|dax|axi|xil|r a|ılı|man|sil| se|seç|adə|ial|onu|öz | cə|miy|əyi|n e|edi| mi| nə|a v|mən|ril|əz |ild|rab|abə|şər|ğın|aya|zam| ni|ulm| xa|təh|əhs|hsi|i h|sti|qu |var|ad |tam|uğu|z h|qan|rəf|n d\",\"ces\":\" pr| a |ní | ne|prá|ráv|ost| sv| po|na |ho |ch | na|nos|o n|ání| ro|ti |vo |neb|má |ávo| má|ou | ka|kaž|ažd|ebo|bo | je| za|ždý|dý | př|svo|a s|sti| st|á p| v |vob|obo| sp|bod|pro| zá|rod|ých|ván|ý m|né | by|ení|ého|spo| ná|í a|ová|o p|roz|mi |ně |ter| li|a p|nár|áro| ja|jak|by |to |lid|u p| vš|ny |ím |í p|i a|a z|o v|kte|mu |at |odn| vy| ma| so|ví |zák|tní|a v|oli|li | kt|í n|kla|do |je |pod|en |em |byl|mí |áva|stá| do|t s|rov|í s|tví|vše|it |dní|o s| ve|pol|í b| bý|být|ýt | se|čin| k |sou|a n|stn|ran|vol|nou|ejn|nes|se |ci |nýc|du |ným|stv|žen|své|vé |ají|jeh|eho|va |mez|ním|ích|ým |ké |ečn|pří|u s|tát|i s|kol|ova|e s|ech|í v|ids| i |maj| to|nu |hra|ave|ole|i v|kon|m p|ému|y s|o z|eré| ze|o d| že|chn|ovn|len|dsk|lad|vat|chr| ta|m a| ab|aby|sta|pra|néh|esm|smí| ni|i n|že |ako| os|sob|aké|i p|st |rac|kdo|zem|m n|odu| ji|bez|ste|ákl|ens|ými|í m| vz|i k| oc|och|jí |oci|áln|lní|a m|dy |lně|vou|při|rav|leč| s |t v| či|čen|áv |slu|jin|oko|nez|tej|řís|stu|ské|ský|nit|ivo|a j|věd|iál| me|ezi|ven|oln|zen|í z|y b|zac|níc|ky |u a|a o|u k|inn|est| tr|svě|nik|ikd|í k| mu|u v|kéh|jno|jíc| dů| od|tup|ože|i j|odi|děl|ího|rok|anu|soc|ciá|ve |é v|něn|din| vo| pl|pln|vin|u o|h p|tak|adn|a t|cho|ává\",\"run\":\"ra |we |wa | mu|e a| n |se |a k|ira|ntu|tu | ku| um|ko |a i|mu |ye |hir|iri|mun|ing|unt|ere|ash|shi|a n|umu|zwa| bi|gu |ege|a a|za |teg|e k|ama|go |aba|uba|ngo| ba|o a| ar|ung|ish|ora|a m|e n| we|sho|na |ese| kw|nga|e m|mwe| ab|ugu|ate|ndi|kwi| gu|ger|riz|wes| at|di |u w|n u|yo |gih|ban|ngi|iza|e b|ara| am|ri |ka |a b|e i|hob|obo| ca|ro |u b|can|nke|ezw|a u| in|bor|bah|ahi|rez|iwe|gir|iki|igi|ihu|ke |ari|ang|aku|a g|hug|ank|ose|u n|o n|rwa| ak|and|kan| vy|ngu|nta| ub|aka|ran| nt|n i|ata|kur|kun|i n|ana| ko|e u|iye| ka|re |any|amw|ta |nye|uko|gin| zi|ite|era|ga |aha| ib| ng|n a|o u|o k| iv|ivy|ho | as|sha|o m|o b| bu|mak|ako|o i| ig|o z|o y| uk|ubu|aga|izw|i b|vyi|ba |aho|kir|nya| is|kub|hin| it|uri|gan|rik| im|u m|guk|bat|nge|kug|ani|vyo|ene|imi|imw| y |jwe|ze |agi|e c|u a|gek|ush|i i|uru|ham|uza|e y|ibi|amb|bur|ina|eme|i a|abi|ha | nk|eye|gus|ber|u g|no |rah|zi |w i|ma |tun|ind|ron|ras|wo |ne |wub| gi|gen|kiz|y i|kor|ura| zu|zub|zin|je |iro|mat|eko|bwa|ika| bo|bak|onk| ma|ugi|mbe|ihe| mw|eka|ukw|wir|ryo| ic|a z| ry|bwo| ag|yiw| ki|gis| yo|bik|ni |nka|rek| bw| ya|tse| ha| ah|umw|he |eng|bir|aro|ury|twa|ant|a c|tar|uki|mw |bih|ku |tan|bos|nde|uro|y a|utu| no|i y| yi|ya |puz|zam|eny\",\"plt\":\"ny |na |ana| ny|y f|a n|sy |aha|ra |a a| fa|n n|a m|y n|an | fi|tra|any| ma|han|nan|ara|y a| am|in |ka |y m|ami|olo| ts|min|lon| mi| sy| na|a t| ol|fan|a i| ha| iz|iza|man|ina|ona|aka|y h|ian|o a|a h|reh|a s|etr|het|a f|on |ire|fah|tsy|mba|ay |zan| hi| ar|ndr|ira|y o|y t|ehe| an|o h|y i|afa|ren|ran| zo|ena|dia|amb|amp|ala|zo |ika|y s| di|tan| az|y z|m p|rin|ia |n j| jo|jo | dr|a d|zy |ao |ry |and| ka|dre|mpi|rah|nen|haf|n d| ir|eo |elo| ta|omb|rai|oan|fa |am | pi|ene|ho | ho|ant|iny|itr|azo|dra|ava|tsa| to|tsi|zon|asa|van|a k|ari|ha |n i|mbe|ray|fia| fo|sa |ony|isy|ova|lal|ly |azy|o f|bel|lom|ham|mis|sam|zay| ra|oto|fir|ban|a r|nat|kan| vo| he|ito|ary|nin|iha| re|a e| ko|tok|fit| no|ita|iar|fot|nam|voa|isa|y v| sa|y r|o n|no |aly|mah|har|ain|kam|aza|n o|otr|eri|hev|oka|sia|ial|atr|y l| la|ila|oa |y d|ano|ata|its|tov|pia|y k|pan|fam|oko|aro|nto|pir| ao|ty |anj|nja|reo| as|o s|hia|o t|mpa|mit| eo|ais|sir|air|ba |tin| it|ver|ino|vah|vy |ton|tao|ank|era|rak|kon|a z|tot|ive|ame|aho|hoa|hit|ati|ity|o m|mik|a v|ani|ori|koa|hah|nga|dri|eha|dy | mo|oni| za|ato|bar|jak|n t|nao|end|eve|lah|aov|mia|izy|lan|nar|ria|ama| pa| mb|aln|lna|ifa|za |to |dro|va | in|ind|ehi|n k|iva|nta| va| al|via|rar\",\"qug\":\"una|ta | ka|na |ka |ash|cha|a k|ari|ish|kun|kta|pak|ana|hka|mi |shk|apa|ach|hay|akt|shp|man|ak | ch| ha|ata|rin|lla|tak|ita|ami|ama|aku| pa|har|pas|ayñ|yñi|ina| ma| ru|uku|sh |hpa|run|kuy|all|aka| tu|tuk|an |chi|yta|a c|chu|in |ñit|ris|a h|nka|nak|tap|kan| ki|ayt|pi |pa | sh|i k|nap|a p|pay|kaw|kam|nam|ayp|aws|wsa|a s|ank|nta|iri|uy |a t|hin|a m|ay | li|ant|kay|lia|nat|a r|shi|iak| wa|lak|uya|say|yuy|y r|ypa|kis|a a|hun| yu|n t|tam| ti|n k| ya|yay|lli|a w|hpi|api| al|un |yku|ipa|a i|iku|ayk|shu| sa|ush|pir|ich|kas|kat| il|huk|ill|a y|hu |rik|yac|a l|kac| ku|hik|tan|ypi|wan|ika|i c| ni|ima|ila|ink|ayl|yll|mac|nis| ta| wi|kus|i y|i p|n s|llu|tin|la |yan|kpi|awa|li | ri|may|tik|iks|lan| pi|aya|kin|yas|ksi|kll|kak|lat|aym|ura|war| ay|k h|uch|akp|sha|ukt|nch|h k|i t|ull|uma|mas|iya|kir| ii|h m|pip|n p|kik|iki|i s|kar|aki|riy|han|y h| su|mak|n m|tac|nal|nac| ña|k k|k t|k a|iwa|mam|i m|nki|yma|wil|his|pal|i i|asi|nmi|i w|sam|k l| hu|sum|pam|kap|k i|pan|iia|huc|ik | mu|mun|pik|was|k m|ma |hat| im|k r|akl|u t|ha |llp|a u|wak|has|anc| ak|imi|mal|y k|ian|iña|tar|yka| iñ|iñi| mi|n y|ywa|uyk|unk|a n|arm|rmi|h p|pur|akk|kim|san|ati|uti|uri| ar|sak|i a|hap|iyt|ayw|si |yar|las|lpa|ñaw|awp|wpa|i r\",\"mad\":\"an |eng|ban|ng | sa| ka|dha| ba|ren|ak |ang| se| ha|hak| dh|na | pa|adh|se |a s|aba|n s|ara|ngg|are|ha |aga|sa | or|sar|ore|asa|ana| ma|a k|aan|gi |ale| ag|gad|a b|n o|n k|ra |ala|eba|gan| ke|dhu|aja|ota|bas|man|dhi|n b|tab|ka |sab|ama|beb|abb|at |nga| ta|ggu|ako|pan|huw|uwi|wi | ot|san|a d|ata|eka|i h|bba|agi|ba |lak|hal|ong|kab|em |g a|lem|a o| pe| na|par|ane|ngs|nge|gar|a p|tan|gsa|a a|ran|ken|i s|guy|uy |k h|n p|n a|ada|al |apa| ga|on | an|g s|ta |kaa| e |e d|pon|nek|ssa|a m|kal|a e|e e| la|kat|ona|abe|nan|asi|jan|ate|lab|ri |sal|lan|i p|sad|aka|e a|a h|ari|ena| bi|oss|si |daj|i k| ng|har|gen|ton|e k|epo|ano|bad|car|n d|ar |era| be|nag|kon|g k|ase|nya|nos|n n|mat| kl|mas|ela| da| al|n t|uwa|wan|sae|pad|ggi| so|as |hi |adi|a n|i d|g e|k k|ne |oan|uan|k s|k a|e b|ah |ina|kla|ter|om |gap|le |koa|yat|per|neg|ega| ja|bi |abi|aha| ep|aon| as| mo|n h|i a|one| di|ma |kas|m p|di |aya|nto|int|n e|te |bat|epa|nda| ca|pam|e s|amp|to |dra|ann|oko|rga|nna|e p|g p|nta| ra|and|i b|nao|k d|pen|aen|ste|ila|yar|a t|mpo|ok |set|n m|k b|isa|kom|raj|arg|ika|bin|ant|ga |hid|idh|aju|i m|nas|kar|mos|ost| ho|lae|dil|t s|a l|das|rek|tad| a | po|ett|tto| to|bis| dr|jat|add| ko|ent|gam|e m|ndh|hig|iga|maj\",\"nya\":\"ndi|ali|a k|a m| ku| nd|wa |na |nth| mu|yen| al|ra |thu|se |hu |nse|di |a n|la | pa| wa|mun|unt|nga| la|a u|u a|e a| ma|za |ons|ace|ce | lo|iye|a l|idw|ang| ka|kha|liy|ens|li |ala|ira|pa |ene|i n|we |e m|era|ana|dwa|lo |hal|ulu|ko |dzi|iko|yo |o w| ci|a p|ga |chi| mo|o l|lu |o m|zik| um|moy|oyo|ufu|ner| an|and|iri|umo|ka |a a|dan|ena| uf|ful| nc|nch|hit|ito|to |a c|kuk|dwe| da|fun|wac| dz|e l|kap|ape|a z|e k|ti |u w|ere| za|lir|pen|aye|tha|kut|ro |mu |lid| zo|ofu|ing|i m|amu|mal|o c|kwa|mwa|so |o a|o n|i p|eza| mw|nso|iro|zo |i d|lin|ri |edw| a |i l| li|a d|kul|ati|uti|una|lan|i k|o k|ung|alo|dza|i c|o z|a b|uni|iki|lam|mul|ulo| ca|nkh|nzi|gan| na|ant|e n|san|tsa|wir|oli|u k|lon|dip|ipo|unz|yan|gwi|ca |ome| ko|aku|akh|pon|ngw|kir| po|uli|gwe|cit|mer|pan|kup|ame|mba|tsi|bun|ukh|ope|siy|iya| ya| am|han| bu|ama|bvo|vom|rez|lac| kw|men|u n|ao |pez| on|zid|osa|u o|i a|nda|e p|ne |ank|hun|o o|nik|ku |its|adz|u d|aka|diz| kh|ina|ezo|ndu|kho|okh|ya |awi|izo|ans|pat|eze|khu|zi |phu|kus|eka|o p| ad|mol|ets|sa |iza|kwe|wez| un|izi|oma|ma |oci|du |ula|ani|lok|haw|ika|ja |say|nji|jir|amb|ats|sid|mai|aik|mak|aph|i u|isa|lal|u m|ogw|no |oye|ukw|osi|sam| si|win| zi|ni |tse|si |e o|opa|emb| ba|ban\",\"zyb\":\"bou|aeu|enz|nz |eng|iz |ih |uz |uq |ing| bo|oux| di| ca|z g|dih|ux |ngh|cae|gen|euq|z c|ng |you|ung|ngz|ij | mi| gi|miz|aen| ge|z d| ci|gya| yi| de|ouj|uj | gu|cin|ien|ngj| mb|mbo|dae|zli|gij| se|j g|ang|z y|j d|ouz| cu| ba|nae|h g| da|yin|oz |de |z b|nzl|li |nj |x m|euz| cw| yo|iq |gz |q g|x b|yau|h c|vun|inh|ix | ga|cwy|wyo| nd|vei|nda| ro|rox|oxn|z m|i c|j b| si|wz |gh | gy|cun|gue|xna|unz|hoz|can|bau|ei |z h|yen| li|inz|dan|q c| hi|gj |uh | vu|faz|yie| bi|zci|hin|goz|uek| fa|gun|aej|ej |ya |nh | ae| go|au |ciz|den|h m|nq |ngq|ouq|gva|z s| do|ci | wn|q d|eix|h d|ekg|kgy|q s|hu |u d|j n|auj|j c|gai| ha|az |nhy|z l|gjs|jso|sou|ou |bin|sin|lij|h s|sev|eve|nei|q y|aiq|sen|h y| la|enj|ouh|i b|vih|din|q n|awz|j y|z r|enh|en |uen|bwn|wng|ozc|z n|anj|j s|liz|g g|g b|i d| ne|bae|awj|sei|eiq|hye|anz|oen|hix|zda|gak|ez |anh|u c|z v| ya|h f|x d|in |ghg|bie|enq|zsi|ghc|hci|siz|i g|n d|h b| du|cou|ngg|ngd|cuz|eiz| ho|dun|g c|law|j m| dw|env|nvi|dei|a d|ek |yaw|wn |giz|gzd|nzg|wnj|gda|ak |nde|auy|yuz|hgy| co|ujh|jhu|e c|hen|ujc|min|izy|g d|gzs|daw|aw |g y|ozg|ai |iuz|x l| na|iet|aih|gih|iuj|zbi|uyu|coz|sae|i m| he|zdi|dwg|q b| fu| ve|guh|iqg|qgy|yai|yoe| so|biu|vaq|aq |yun|izc| ra|cie|zge|n g\",\"kin\":\"ra | ku| mu|se |ntu|a k|tu |nga|umu|ye |li | um|mun|a n|unt|ira| n |ere|wa |we | gu|e n|mu |ko |a b|e a|o k|a u|a a|u b|e k|ose|uli|ro | ab|aba|gom|e b| ag|omb|ba |ugu|ang|o a|gu |mba| ib| ub|eng|ihu|za | bu|ama| by|hug| ba|o b|e u|kwi|ga |ash|ndi| ka|yo |e i|ren| cy| ak|iye| bi|re |ora|igi|gih|ban|ubu|di | nt| kw|gan|a g|aka|aga|nta|a m|iro|a i| am|ku |i m|ago|byo|ta |ka |cya|ibi|and|na |ali|uba|sha| bw|ili|yan|no |ese| ig|u m|o n|kan|ish|ana|sho|obo|era| we|ya |aci|i a|ura|wes|uko|e m|ran|o i|u w|uru|wo |kub|n a| im|ber|hob|bor|ure| no|ani|u a|gac|cir|o m|ush|bur|eke|ne |wiy|ara|nge|rwa|yos|e y| y |uga|bwa|ho |zo |ind|ane|mwe|iza|are|rag|ge |mo |bwo|bul|teg|ege|u k|u n|n i|ze |aha| uk|bye|anz| al| ki|bah|uha|ite|kug|gir|ngo|go |age|ger|u g|zir| ry|ugo|bih|akw|o g|guh|iki|bat|iby|gar|imi|mbe|y i|n u|ha |atu|mul|tan|eye|e c|kim| ni|shy|aho|tur|kir|ate|abo|je |bo | ng|u u|ata|o u|iko|gus| bo|bos| gi|a s|nir| ru|gek|i b|eza|i n|nzi|i i|rez|kur|ako|any| as|ung| se|bis|nya|o r|uki| ya|ngi|mat|eko|ugi| in|o y|kor|imw|rer|bak|yam|bit| ik|kar|ire|ige|shi|hin|ing|byi|nu |mug| at|yem|eme|gaz|irw|yer|rek|key|ihe|gen| ic|icy|hak|but|ets|tse|eze| ur| na|bag|awe|ubi| yi|i k|ezo|tek|ubw|rya|uza\",\"zul\":\"nge|oku|lo | ng|a n|ung|nga|le |lun| no|elo|la |wa |e n|ele|ntu|tu |gel|we |ngo| um|e u|thi|uth|ke |hi |ni |ezi|lek| ku|nom|ma |o n|onk|nke|pha|gok|a u|nel|ulu|unt|o l|kwe|oma|o e|ang|lul| uk|kul|a k|eni|uku| wo|kel|hla|mun| lo|ama| ne|ath|ho |umu|ela|won|elw|lwa|ban|a i|ule|zwe|ana| un|une|ing|lok|aka|elu|wen| kw|aba|tho|akh|khe|ala|gan|o y|enz|ko |thu|na |u u|a e|gen|i n|zin|kho|enk|kun|mal|alu|e k|lel| na|kat|e a|nku|eko|he |hak|lan|kwa| ez|o a|o o|kub|ane|ayo|yo |lwe|eth|obu| em|nzi| ok|okw|kut| ba|ile|ben|het|eki|nok|nye|ike|i k|so |isi|ise|esi| ab|mph|nhl| is|aph|fan|ga |isa|ini| ye|e i|nen|uba|ba |zi |hol|ka |ant| fu|fut|uhl|abe|and|do |ukh|kuk|eke|a a|kil|e w|the| ya|nda|za | im| in|olo|ekh|eli|ith|khu|eng|yok|nis|sa |kuh|o u|any|ye |e e|i w| ak|olu|ndl|a o| le|ne |ume|mel|eka|mth| ko|emp|isw|amb|emi|no |uny|iph|i i|zo |kuf|nay|ind|ezw|kuz|vik|alo|o w|hul|ebe|lin| yo|kan|eze|ndo|uph|hlo|yen|enh|phe|ufa|ake|ale|kug|fun|und|wez|li |seb|a l|ula|wam|din|ahl|nez|yez|nya|bus|bo |azw|o k|ink|kek|nan|i e|ola|izi|mbi|ili|han|kuv|ase|hel|hut|a y|kis|kuq|da |omp|swa|kup|nem|ano|phi| ol|azi|ubu|o i|kol|oko| el|e l|huk|ani|nje|sek|uke|lon|pho|kom|lak|kus|zis|ham|mba|izw|ulo|hun|i u|u n\",\"swe\":\" oc|och|ch |er |ing|för|ar |tt |en |ätt|nde| fö|rät|ill|et |and| en| ti| rä| de|til|het|ll |de |om |var|lig|gen| fr|ska|ell|nin|ng | ha|ter|as | in|ka |att|lle|der|und| i |sam|lla|fri|ghe|ens|all|ör |na |ler| at|ete|den| el| so| av|av |igh|r h|nva|la |r r|env|ga |tig|nsk|iga|har|t a|som| ut|tti|nge|t t|ion|a s|ns |a f| sk|a o|r s|män|an |är |isk|rna| st| si| vi| sa| al|t f|ra | be|a r| är| me|ati|n s|lan| va| an|med|tio|ern|nna|t e| un|äns|ta |nat|sta|ig | åt|ten|kli| gr|vis|t s| la|äll|one|änd|han| ge| li|ans|stä|ner|t i| må|gru|ver|rih|ihe| mä|sni|lik|n f| re|r a| na|må |ers|t o|ad |r e|da |det| vä|ent|run|rkl|kla|ri |h r|nom|kap|igt|gt |n e|dig|uta|tan|e s|dra|s f|ed |d f|lar|rin|ran|upp|erk|tta|ika|änn|r o|erv|rvi|kte|vid|a i|lag| på|g o|id |ari|s s|r u|lin| om|ro |a m|els|isn|del|sky|r d|e m|mot|ot |vil|på | mo|r m|str|örk|ndl|on |i o|nd |tni|n m|ber|nad|gan|örs|r f|kal|era|a d|dd |je |itt| up|sin|nga|täl|ras|n o|ärd|i s|r i|enn|a n|n a| hä|bet|ski|kil|n i|lse|rel|t b|g a|kyd|ydd|arj|rje|l v|s e|end|amt| fa|nas| så|inn|tat|per|t v|l a|int|tet|öra|e f|tra|r g|yck|r ä|vär|ege|arb|d e|re |nis|ap |ara|bar|l s|t l|lit|när|lke|h f|ckl|v s|rän|gar|ndr|mt |se |häl|h a|llm|lmä|ess|sa \",\"lin\":\"na | na| ya|ya |a m| mo|a b|to | ko| bo|li |o n| li|i n| pe|i y|ngo|a n|a y|ki | ba| ma|kok|pe |la |a l|zal|oki|ali|nso|oto|ala|ons|so |mot|a k|nyo|eng|kol|go | ny|yon|nge|o e|ang|eko|te |o y|olo|oko|ma |a e|iko|e m|e b|lik|ko |o a|ako| ye|ye |ong|mak|si |isa| ek|aza|lo |sal|ama| te|o p|bat| az|e n|oyo|ani|ela|sen|o m|a p|ta |ban|i k|amb|ni | es|yo |aka|mba|osa| oy|mi |a t|eli|lis|i p|i m|ba |mok| to|mbo|bok|isi| mi|ing|lon|ato|o b| nd|ge |bot|ota| ez|nga|nde|eza|o t|kan|ka |gel|e k|bo |ese|sa |lam|koz|den|oba|omb| po|ga |mos|kop|oli|e e|yan|bon|oka|kob|lin|bik|po |kos| lo|sam|e a| ’t|’te|kot|ti |ngi| bi|e y|omi|esa|i b| el|elo|lok|gom|som|i t|ate|ika|kam|ope|a s|kat|ati|ata|wa |iki|i e|bom|tal| ka|oza|o l|bos|zwa|ola|pes| se|oke|bek|o o|ndi|bal|nda|nza|oso|omo|lak|bak|mis| at|bis|sus|usu|su |osu|lib|and|ozw|asi|ele|tel|mu |i l|e t|ase|mol|mob| nz|kel|ene|ne |mbi|ami|aye|nis|a ’|tan|le |obo|baz|pon|wan| ep|yeb|kum|sem|emb|mal|gi |nya|ote|e l|oku|bas| ta| ak| ti|tin|ina|gis|opo|ana|mab|bol|u y|mat|ebi|oti|mib|obe|a o|san| so|mbe|be | mb|ibo| et|ike|da | en|ben|za |yok|eni|tey|bwa|bi |kom|i o|gob|mik|umb|se |eba|e p|ibe|ale|lel|boy|eta|i a|bu |ime|sik|mon|ona|mel|ose|mwa|sol|geb|ebe\",\"som\":\" ka|ay |ka |an |oo |uu |da |yo |aha| iy|ada|aan|iyo|a i| wa| in|sha| ah| u |a a| qo|ama| la|ga |hay| dh|ma |aad| xa|ah |a d| da|qof|in |aa |iya|a s|a w| si| oo|isa|eey|yah|xaq| le|ku |lee|u l| ku|taa| ma|la |dha|ta |aq |q u|eya|y i|ast|sta|a k|ha |of | wu|wux|uxu|xuu|kas|sa |u x|ara|doo|wax| am|iis|ro |a q|inu|nuu|ala|a x|o a|maa|nay| sh| qa|o i| aa|kal|le | lo|loo|f k|o d|ana|a u|o x| xu| xo| ba| uu|yad|iga|a l|si |dii|a m|yaa|gu |ash|u d|ale|ima|adk|aas| ca|o m|do |lag|add|na |lo |o k|san| is| so|adi| mi| fa|xor|dka|aqa|iin| he|aar|had|rka|a o|ado|dad|soo|mid|kar|aro|baa|qaa| ha|nta|o h|ad |u k|aga|dda| ga|hii| sa|u s| ay|har|axa|mad|n k|eed|quu|haa|daa|o q|aal|o s|n l|xuq|uqu|n i|id |hel|aya| ee| ho|nka|i k|uuq|nim|ina|ihi|elo|waa|dan|agu|ays|a h|saa|mar|ark|ya |ank|o w|naa|gga|ee |ax | bu|uqd|qda|rri|riy|n a| no|u h|n s|oon|lka|u a|laa|o l|ab |haq|uur|int| gu|ida|iri|lad|dhi|yih|ysa|dah|to |aam|ofk| xi|arc|rci|eli|ood|ool|orr|alk|goo|ayn|e u|n x|h q|asa|sag|a c|sho|ami|i a|n q|siy| ug|kii|o u| ta| ge|gel|agg|a g| di|ido| ji|hoo|a f|al |jee|dal|ago|ii |a b|mo |iir|ooc|bar| ci|caa|xir|ra |aqo|sig| mu|aba|oob|oba|u q|aaq|aab|sad| ra|cad|dar|imo|ar |y k|fka| du|xay|y d|ras|o c|ari\",\"hms\":\"ang|ngd|gd |ib | na|nan|ex |id | ji|ad |eb |nl |b n|d n|ud | li|jid| le|leb| ga|ot |anl|aot|d g|l l|b l| me|ob |x n|ngs|gs |mex|nd |d d| ne|jan|ul | ni| nj|nja| gu| zh|lib|l n|ong| gh|gao|b j|b g|nb |l g| je|jex|gan|ngb| ad|end|el |gb |han| sh|ub | da|d j|t n|d l| nh|nha|b m|is |d z|x g| ya| wu|she|l j|oul|il |nex| ch|b y|d s|gho|gue|uel|wud| gi|d y|hob|nis|d b|s g| zi|lie| yo|es |it |nx |ies|aob|gia| de|eib|you|ian| hu|s j|d m| ba|zib|oud|b d|chu|ut |t j| do|ol |at |hud|nen|hen|s n|iad|ab |zha|t g|dao| go| mi|enl|x j|enb|b z|hei|eit|nt |b s| ze|d c|al |inl| xi| se| re|ren|hao|d h| fa|ngx|gx |anb|gua|yad| ho|x z|fal|b w|nib|ix |b h|and|had|t l|x m|gou|d x|bao|ant|don| xa|yan|d p|s z|hib|anx|zhe|ox |l d| pu| du|dan|gha|od |s m|sen|xin|lil|hui|uib|uan| we| di|b x|oub|t h|hub|zhi|t z| ju| ge| ng|t m|hol|xan|pud|x l| ma|jul|eud|hea|l s|enx|l z|jil|zen|aos|os |s l|d r|dei|ngt|gt | yi| he| si|nga|heb|zho|hon|did|d a| lo|b a|x c|dud|b b|lou| bi|dou|geu|b c|d k|x a|d w|wei|x b|l h|x d| qi|bad|t w| bl|blo|aod| nd|nia|deb| ja| sa|eut|ax |eab|s a| bo|lol|sat|ngl|gl | to|l m| pa|pao|b f|lia|x s|heu|t s|che| ca|can|s w|s y|sib|mis|zei|ux | pi|x r|gon|t p|jib|iel|d f| cu|ghu|unb|t c|inb| ko|x x\",\"hnj\":\"it | zh| ni|ab |at | sh|ang|nit|os | do|uat|ox |ax |nx |ol |ob | nd|t d|x n|nf |zhi|as | ta|tab|ef |if |d n|ad | cu| mu|cua|uax|mua|uf |b n|ib |s d|dos|id |enx|hit|nb | lo|f n|t l|ngd|gd |inf|us | go|ux |ed |she|b d|t n|b z| ho| yi|x z|aob|l n|t z|ong| zi|ix |nda|d z|yao|uab|enb|ut | de|f g| dr|dol| yo|zhe| le|euf|x d|inx| ne|nen|das|dro|ngb|gb | ge|d s|s n|f z|uef|hox|len|b g|il |ud |nd |gox| ua| na| du|x j|f y|oux|x c|han|ndo|of |f h| ja| gu| ny|zha|s z| da|uad|heu|lob|shi|ik | bu| ji|hai|ged|od |b h|t g| ya|ngf|gf | hu|ex |bua|you|rou|nil|hen|yin|zhu|out|ous|nya|is |f d|enf|b c|af |dou|lol|nad| re| ha| xa|uk |t s| id|xan|sha|hua|jai|b y|aib| qi| la|s s|d d|l m|ot |hue| xi|x g|x l|ren| kh| dl|ait| ba|aod| zo| ju|jua|zif| nz| ga| di|bao|x y|b s|x s|xin|aof| li|b b|x m|x t|eb |b l|ngx|gx |dax|b t|hef|gua| be|las|d j|s t|hed|nzh|l d|t y|hif| pi|f b|d l| ib|t h|f l|hou|dus|hun|und|s l|t r|el |uas|gai|ngt|gt |hab|aos| mo| zu| bi|f t| za|d y|x h|aik|k n|end|aid|ros| gh|zos|pin|ak |s x|d g|f s|s y| ao|k z|s b|due|mol| fu|dex|iao|x b|hik|x i|deu|l b| bo|b k|s m| lb|lb | hl|lan|uaf|d b|zho|al |eut| ro|ub |et |t c|d m|x x|d h| ch|d p|f x|t b| nt| su|uak|zis|shu|t t|gha|yua| we|oud|gon|d t\",\"ilo\":\"ti |iti|an |nga| ng|ga | pa| it|en | ka| ke| ma|ana| a | ti|pan|ken|agi|ang|a n|a k|aya|gan|n a|int|n t|ali|lin|a m|dag|git|a a|i p|teg|a p|nte| na|man|awa|kal|da |ng |ada|ega|nag|way|na | da|n i|sa |i k|n k|ysa|n n|al |a i|no |add|aba| me|eys|i a|nna|dda|ngg|mey| sa|ann|pag|ya |gal| ba|mai| tu|gga|ung|i s|kad|yan|tun|nak|wen| ad|aka|aan|enn|nan| ag|asa|i n|wan| we|nno|yaw|i t|l m|ata| ta|ami|a t|apa|ong| si|li |i m|kas|aki|ina|ay | an|n d|ala|a s|g k|gpa|mak|eng|ili|n p|et |ara|at |ika|ipa|dad|ama|nai|g i|yon| aw|in |ao |toy|oy |ta |on |aen|ag |bab|ket|aik|ily|lya|sin|tao|ani|agp| ki|a d|bal|oma|ngi|uma|g a|i i|kin|naa|bae|o k|y n|daa|gil|o t|iwa|ags|pad| am|syo|i b|kab|sab|ida| um|mil|aga|gim|ar |ram|yto|san|tan|min|pap|n m|eg |agt|o n|a b|aar|asi|ino|nom|nia|n w| wa| de|dey|pam|i e|sal|bag|saa|iam|eyt|day|kit|ak |ed |gsa|lak|t n|ari|nay|kan|nat|t k|i l|i u|sap| gi|g n|aw |sia|o p|o i|dum|i g|to |uka|agb|bia|aib|lub|ubo|ged| li|apu|pul|lan|imo|mon|y a|ma |pak|ias|sta|den|i d| id|bas|kai|gin|i w|kap|ita|asy|kni|kar|bon|abi|ad |umi|ban|agk|akd| ar|mid|din|sar|iba|nnu|inn|o m|ibi|ing|ran|akn|nib|isu|abs|maa|kda|aip|as | la|o a|t i|idi|nto|lal|amm|aad|or |adu|kua|ais|nal|w k|ulo|y i\"},\"Cyrillic\":{\"rus\":\" пр| и |рав|ств| на|пра|го |ени|ове|во |ани| ка|ть | по| в | об|ия |лов| св|сво|на | че|о н|ело|ост| со|чел|ие |ого|ния|ет |ест|аво|ажд|ый | им|век|ние| не|льн|име|ова|ли |ать|т п|при|каж|и п| ра|или|обо|жды| до|ых |дый|ек |воб|бод|й ч|его|ва |ся |и и|мее|еет|но |и с|аци|ии |тва|ой |лен|то | ил|ных|к и|енн|ми |тво| бы| за|ию | вс|аль|о с|ом |о п|о в|и н|ван|сто|их |ьно|нов|ног|и в|про|ако|сти|ий |и о|бра|пол|ое |дол|олж|тор| во|раз|ти |я и|я в| ос|ным|нос|жен|все|и р| ег|не |ред|тел|ель|ей |сно|оди|о и|а и|чес|общ|тве|щес| ко|ним|има|как| ли| де|шен|нно|е д|пре|осу| от|тьс|ься|вле|нны|аст|осн|а с|одн|ран|бще|лжн|быт|ыть|сов|нию| ст|сту|ват|рес|е в|оль|ном|чен|иче| ни|ак |ым |что|стр|ден|туп|ду |а о|ля |зов|ежд|нар|род|е и| то|ны |вен|м и|рин|нац|вер|оже|ую | чт|она|обр|ь в|й и| ме|аро|ото|лич|нии|бес|есп|я п|х и|о б|ем |е м| мо|дос|ьны|тоя|еоб|ая | вы| ре|и к|кот|ное|под| та|жно|ста| го|гос|суд|ам |ава|я н| к |ав |авн|ход|льс|нст| бе|ово|и д|ели| дл|для|ной|вов|ами|ате|оро|дно|ен |печ|ече|ка |еск|ве |уще|в к|нен|мож|уда|о д|ю и|ции|ког|вно|оду|жде|и б|тра|сре|дст|от |ьст|е п|нал|пос|о о|вны|сем|азо|тер|соц|оци|циа|ь п|олн|так|кон|ите|обе|изн| др|дру|дов|е о| эт|х п|ни |еди|дин|му \",\"ukr\":\"на | пр| і |пра|рав| на|ння|ня | за|ого| по|го |ти |люд| лю|во | ко| ма|юди|льн|их |аво|о н| не|анн|дин| св|сво|кож|ожн|пов|енн|жна| до|ати|ина|ає |а л|ува|не | бу|обо|аці|має| як| ос| ви|є п| та|аль|або|них|ні |ть | ві|ови| аб|бо |а м|ере|і п|без|вин|при|о п|ног|іль|ми |ом |та |ою | бе|ста|воб|бод|до |ост|ті | в | об|ва |о в| що|ий |ся | сп|і с|від|нов|кон|и п|ств|инн|нан|ван| у |дно|она|ват|езп|пер|но |ій | де|ії |ідн|и і|сті|під|ист|нні|ако|ьно| мо|бут|ути|ід |род|і в|що |ава|тис|а з|вно|ну |и с|ої |і д|ду |а в|ів |аро| пе|ний|а п|му |соб|яко|спр|і н| рі|рів|чи |ним|ля |нар|лен| ін|у в|нен|ому|нац|ися|и д|ова|ав |і р| ст|ові|нос| пі|ють|сть|ово|про|одн|у п|віл|овн|вни| ро| її|її | вс|ном|і з| ра| су|мож|чен|ві |буд|іст|івн|оду|а о|ни |сно|ими|а с| со|ьни|роз|и з|зна|я і|о д|х п|е п|о с|и в|дер|ерж|им |чин|рац|ції|і б| од|а н|сі |сту|тер|ніх|ди |їх |нна|так|о з|я н|заб|зпе|у с|спі| ні|е б|ржа|осо|я п|в і|кла|то |а б|осн|рим|сві|віт| дл|для|тва|ами|зах|рес| ре|ков|тор|соц|оці|ціа|і м|ки |тан|абе|печ|ког|ага|гал|ту |ї о|е м|оже|же |удь|ніс|ара|руч|авн|и щ|ною|я в|всі|кої|ини|ь п|осв|і і|ахи|хис|іал|а і|оди|тво|жен|нь |нал|ваг|аги|ги |інш|лив|х в|заг|роб|піл|в я|ком|об |о у|жав|і о\",\"bos\":\" пр| и |рав| на|пра|на |да |ма |има| св|а с|а п| да| по|а и|је |во |ко |ва | у |ако|о и|но | за|е с| им|аво|ти |сва|ава|о н|и п|ли |или|и с|вак|ост| ко|их |не |а у| сл|вањ| не| др|ње |кој|ије|ња |и д| би|ств|им |у с|јед| ил|сло|лоб|обо|бод| је| ра|при|ање|вје| об|а д|ом |се | су|е и|ју | се|сти|и и|а б|дру| ос|е п|вој|циј|у п|о д|а о|раз|су |ања|а н|ује|ова|у и| од|и у|ло |едн|ни |у о|ово|аци|ити|о п|а к|оје|жав|нос|дје|е о|бра|пре|шти|а ј|про|и о| ка|них|бит| тр|тре| бу|буд|у з|ог |ста|ја |држ|ржа|е д|миј|сво|реб|авн|ија|и н|е б|ђи |пос|ту |аро|род|ред| ње|ба |а з|ка |де |ем |ају|ива|ве |е у|јер|бил|ило| из|ени|ду | до|а т|за |еђу|нар|тва|одн|њег|гов| са|ним|м и|вим| ни|у д|јел|о к|оји| см|дна|уђи| ст|алн|ист|и м|еба|ран|ичн|вно| дј|у н|ода|нак|е к|ан |нов|сно|сту|нст|ено|чно|ани|ном|е н|тив|нац|аве|и б|сми|чов|овј|осн|а р|нап|ови|анс|дно|оја|ног|м с|еди|ара|ој |ну |кри| кр|оду|ико|рад|ник|туп| чо|јек|тво| вј| ми|тељ|обр|жив|заш|ашт|тит|уна|его|под|сам|о о|руг|ји | мо|ву | ов|х п|уду|рив|ење|дст|те | те|а ч|вни|сви|и в|ина|и т|ра |ите|у у|иту|међ|ак |дни|ниц|њу |нич|одр|вољ|ави|г п| оп| та|рим|кла|е т|ао | вр|акв|тно|мје|дуђ|она|ада|сто|оби|едс|то |оди|о с|ку |риј|у м|од |ичк|вен\",\"srp\":\" пр| и |рав|пра| на|на |ма | по| св|да |има|а п|а и|во |ко |ва |ти |и п|ако| у |а с| да|аво|ост|и с| за|о и|сва| им|вак|је |е с|ава| сл|о н| ко|ња |ом |но | не|не |ли |у с| др|или|сло|обо|кој|их |лоб|бод|им |а н|сти|ств|а о|ју | ил| би|при|а у| ра| је|ог |јед|ње |е п|у п|ни |а д|и у|едн|ити|нос|а к|о д|ање|ова|про| су|и и| ос|вањ|ста|дру|е и|циј|се |род| об|и о|ања|ају|е о|ове| де|аци| ка|ово|ја | ни| од|ве | се|и д| ст|м и|авн|и н|ује|ени|ија|дна|жав|у и|ред|су |нов|оди|вој|тва|е б|оја|што|у о|ара|а б|држ|ржа|одн|ним|ран|пош|ошт|а ј|ка | ов|у у|ду |аве|осн|сно|шти|аро|раз|бит|а з|у з|ења|де | из|них|о п|у д|е д|пре|ву | тр|ту |еђу|нар|гов|без|ичн|за |вно|ло |у н|оји| са|то |ан |нак| ме| ње|чно|сво|вим|нац|ода|ји |ани|ме |ико|ник|ика|е к|пос| кр|тре|реб|нст|сту|е у|ку | до|ашт|тит|алн|дно|њег|ном|ног|м с| вр|о к|ој |чов|анс|ови|о с|бра|те |тав|туп|ено|жив|заш|ем |и м|дни|вар|рив|руг|вољ|ави|штв|е н|као|ао | ли|ст |ило|њу |сме|о ј| см| чо|оду|вре|дст|од |а т|кри| бу|буд|и в| ве|вер|а р|дел|тво|међ|оје|м п|ављ|его|под|ена|уги|ла |пор| оп|руш|ушт|ком|еди|ба |кла| мо|и б|как|акв|рад|ну |век|рим|гла|јућ|уде|вни|еба|е р|сви|м н|иту|тер|ист|а ч|пот|рем|ниц|у в|х п|ива|сам|о о| он|езб|збе\",\"uzn\":\"лар|ан |га |ар | ва| би|да |ва |ир | ҳу|ига|уқу|бир|ҳуқ|қуқ|ган| ҳа|ини|нг |р б|иш |ни | та|лик|инг|ида|а э|или|лиш|ари|нин|иши| ин|инс|он |ади|нсо|сон|ий |лан| ма|дир|кин|и б|ши | бў|ҳар|бўл| му|уқи|дан|ила|қиг|р и|қла| эг|эга| ўз|а б| эр|эрк|кла|қил|оли|ки |гад| ол|нли|лга|и ҳ|рки|лиг|иги| қа| ёк|ёки|иб |н м| ба| қи|н б|ри |ара|атл| бо|ҳам|лат|бил|ин |р ҳ|а т|ала|лаш|бош|ик |инл| эт|ш ҳ|а ҳ|и в|ниш|тла|эти|тил|мас|а қ|и м|оси|им |ат |уқл|арн|рни|қар|ани|а и|ўли|ги | да|н ҳ|риш|мла|ли |и т| ха|арч|рча|ча |бар|аси|ўз |а а|рла| бу|а м|лин|ати|ият|либ|таъ| ту| ас|тиб|аро|а о|ун |тга|р в|икл| бе|мум|н қ|али| те|сид|ш в|мат|амд|мда| ке|лла|шга|н э|дам|амл|хал|ола| қо|ири|ирл|илл|а ш|рга|иро| шу|тиш| де|умк|мки| эъ|тен|енг|а ў|рда| са|гин|имо|тар|а ё|ур |рак|алқ| ки|аза|к б|ода|сий|а к|тни|ўлг|н в|нда|шқа|зар|н о|и қ| ми|мил|р т| си|ак | ша|ор |кат|ера|сиз|ам |асо|сос|н ў|шла|н т|нид|ошқ|й т|ана|ти |рин|асл|бу |син|дав|илг| со|ас |нга|лак|ино|ъти|муҳ|а в|аш |бор|лим|уни|лли|н и|си |и э| ка| то|а д| жа|ами|қон|на |риг|лма|кер|авл|вла|и а|дек|екл|ят |ака| эм|эма|эът| ҳе|ҳеч|еч |ким|икд|кда|сит|лад|и ў| ни|ник|ага|и о|и с| уч|учу|чун|аъл|ъли|анл|аёт| иш|а у|ўзи|диг|ай |ада|оий|мия|тда|а с\",\"azj\":\" вә|вә |әр |лар| һә|ин |ир | ол| һү|һүг|үгу| би|гуг|на |ләр|дә |һәр| шә|бир|ан |лик| тә|р б|мал|лма|асы|ини|р һ|ән |шәх|әхс|гла|ары|а м|дир|али|аг |угу| ма|илә|ын |уна|јәт| ја|ара|икд|ар |әри|әси|р ш|рин|әти|дән|нин|н һ| аз|јјә|син| мү|тин|ни |зад|ијј| мә|әрә|мәк|үн |нда|әт |и в|ыны|нын|ндә|ә а|аза|рын|гун|олу| ет| га|лыг|илм|кди|лә |ә ј|әк |лмә|ына|инд|олм| ин|хс |мас|сын|лун|ә б|да |н т|әми| бә|адл|длы|н м|нә |г в|ја |тмә|бәр| он|ә һ|әја|сы |нун|етм|дан|инә|маг|ун |раг|ә в| ва|н а|н б|рлә|ә м|си |әра|н и|ынд| өз|аны|нма|инс|ама|ры |ығы|ли |ил | ал|ала| ди|ә д|ик |ирл|ләт|а б|бил|ыг |мүд| сә|ә и|ны |нла|әлә|дил|алы|ә е|унм|н в|ола|аси|үда|или| дә|нса|сан|угл|ә о|хси| һе|уг |әтл|һәм|әни|ејн|у в| да|тәр|мин|јин|кил|дыр| бу|лан|иш | һа|мәс| ки|ми |лығ|ә г|г һ|и с|даф|афи|фиә|р в| иш| әс|сос|оси|сиа|хал|алг| та| ас| ед|бу |һеч|еч |рә |јан|ы һ|ким|ији|ы о|ина|сиј|әса|сас|а г|јар|лы |түн| ис|ист| со|ал |н ә|ифа|әмә|ә т|мил|илл|лыд|ыды|ыр |әдә|ыгл|лиј|тлә|а һ|мәз| бү|бүт|үтү|ија|иә | үч|үчү|чүн|т в|дах|ахи|хил|р а|ылы|ман|сил| се|сеч|адә|иал|ону|өз | ҹә|миј|әји|н е|еди| ми| нә|а в|мән|рил|әз |илд|раб|абә|шәр|ғын|аја|зам| ни|улм| ха|тәһ|әһс|һси|и һ|сти|гу |вар|ад |там|уғу|з һ|ган|рәф|н д\",\"koi\":\"ны |ӧн | бы|да | пр|пра|лӧн| мо|рав| да|быд|лӧ |орт|мор|ӧм |аво|ӧй | ве|нӧй|ыд |ыс | не|сӧ |ын |тӧм|во |сь |эз |льн|ьнӧ|тны| ас|д м|ыны|м п| и |сьӧ| по| ӧт|то |бы | эм| кы|тлӧ|эм | от|аль|н э|вер|ртл| кӧ|ӧ в| ко|ерм|ств|воэ| до|тшӧ|ола|ылӧ|вол|ӧс |ы с|ліс|ісь|а с|ас |кыт|тво|кӧр| се|нет|ето|шӧм|ӧдн| ме|мед| ол|злӧ| вы|ӧ д|ӧ к|та |аци|ӧ б|вны|лас| на|з в|ӧрт| во|на |а в|ась|ыдӧ| сы|едб|дбы| вӧ|лан|рмӧ| оз|оз | сі|ытш|оэз|ӧтл|ы а|оти|тир|с о|олӧ| чу|ись| эт|ция|рты|тыс|ы б|кол|ы п| го|сет|кӧт|тӧг|ост|тӧн|н б| со| сь|рті|ӧтн|н н|дз | ке|кер|о с|мӧ |ӧ м| мы|ис |а д|ӧг |дӧс|ест|нӧ |пон|онд|ы н|сис|нац|итӧ|н п|суд| уд|удж|выл| ви|эта|н м| эз|ана|ӧны|с с|ть |орй|йын|сси|рре|рез|ьӧр|ті |сыл|ысл|нда|мӧд|з к|а п|с д|ӧр |чук|укӧ|рны|ӧмӧ|кин|рт |овн|ӧт |она|нал| об|ӧ о|отс|лӧт|й о| тӧ|тӧд|дны|асс|кон|слӧ|ы д|скӧ|с в|с м|ытӧ|езл| ло|быт|осу|эзл|кӧд| ум|умӧ|мӧл|ӧ п|асл|тра| ст|ь м|сьн|ьны|ь к| ов|код|сть|а н|ы к|тла|а к|ӧтч|дор|иал|а о| пы|н к|оль| за|аса| дз|нек|а м|н о|етӧ|ӧ н|ерн| сэ|ы м| де| чт|что|йӧ |ы ч|еки|поз|озь|езӧ|вес|ськ|исӧ|ӧтк|тко|рйӧ|ион|ннё|з д|ӧмы|тсӧ|са |кыд|енн|соц|оци|циа|й д|пыр|зын|нӧя|ӧя |зак|ако| мӧ| а |еск|а б|ан |тӧ |гос|уда|дар|арс|рст|рлӧ|ӧ с| ли|эсӧ|оля|мӧс|ӧсь|дек\",\"bel\":\" і | пр|пра|ава| на|на | па|рав|ць |ны |або|ва | аб|ацы|ае |аве| ча|анн|льн|ння| ма| св|ала|сва|не |чал|лав|ня |ых |ай |га | як|век|е п| ад|а н| не| ко|ага|пры|кож|ожн|а п| за|жны|ы ч|дна|бод|а а|цца|ца |ваб| ў |мае|ек |і п|ных|нне|пав|а с|асц|бо |ам |ста| са|ьна|ван| вы|одн|го |аць|наг|він| да|дзе|ара|мі |цыя|оўн|тва| ра|і а|то |ад |ств|аві|лен| ас|і с|най|аль|енн|і н|ці |аро|аво|рац|сці|пад|к м| яг|яго|іх |ама| бы|рым|род|і і|ым |энн|што| та|я а|нан|ана|нас| дз|ні | гэ|гэт|а ў|інн|а б|ыць|чын|да |оў | шт|ыі |а і|агу|які|ным|дзя|я п|цыі|і д|ьны|нар| у |ўна|оль| ўс|х п|нац|ыя |ах | ус|ымі|ля |амі|ыма| ні| гр|воў|ў і|адз|эта|іна|ход|о п| ка| ін|ы п|зна|нен|аба|быц|рад|ўле|чэн|ь с|чы |сам| ст|асн|і р|ду |аў |ера|ры |нал|жна|уль|рам| су|аны|кла|аюч|ючы|оду|ую |а р|ўны|маю|ука|кац| дл|для|ь у|пер|е і|нае|ако|і з|гра|адс|ыцц|яўл|і ў|яко|а з|кан| ро|роў|нст| шл|адн|ода|аса|аду|нав|вы |ы і| пе|і м|кі |але|х і|авя|алі|раб|мад|дст|жыц|раз|зе |нна|ані|х н|е м|ада|нні|ы ў|о н|дзі|я я|люб|аюц|бар|дук|ахо|а в|сац|авы|так|я ў|тан|зак|чна|заб|бес|я і|ваг|гул|ім |ган|зяр|ярж|ржа|жав|ве |е а|м п|ацц|од |ены| дэ|ну |у ш|нах|вол|а т|ога|о с| бе|інш|ака|усе|яна|ека|ка |сно|рас| рэ|ь п|ніч|чац|се |і к\",\"bul\":\" на|на | пр|то | и |рав|да | да|пра|а с|ва |ств|та |а п|ите|но |во |ени|а н|е н| за|о и|ото|ван| вс|не |ки |те | не|ове|о н| по|а и|ава|чов|ия |ане|ни | чо|ие |аво| св| об|а д|е п|век|ест|сво| им|има|и ч|ани|ост|и д|ние|все|тво|или|ли |и с|вот|а в|ма | ра|ват|и п|сек|еки|ек |а о|и н| в |е и| ил|ова|при| се|ето|ата|аци|воб|обо|бод|к и|пре|ат |оди|раз| съ| ос|а б| бъ|ред| ка| ко|лно|ния|о д|бъд|о п|се | от|за |о в|ъде|ята| е | тр|и и|о с|тел|и в|от |ран|е с|нит| де|ка |бра|ен |общ|де |алн|и о|ява|ият|ция|про| до|нег|его|а т|нов|ден|как|ато|ст | из|а ч|тря|ряб|ябв|бва|а р|а к|вен|о о|щес|а з|ено|гов|тве|нац|дър|ърж|ржа|е д|нос|лен|ежд|род|е о|и з|вит| та|зи |акв|ез |она|обр|нар|нот|иче|о т| ни|кат|т с| с |йст|авн| бе|осн|сно|вни|пол|рес|аро|кой|зак|е в|тва|нен|е т|ува| ли|ейс|жав|едв|стр| ст|без|вси|сич|ичк|чки|вид|си |жен|под|еоб|нст| те|ди |ри |сто|ган| дъ|а е|и к| че|ода| ср|сре|ака|чес|и р|и м|т н|одн|о р|лич|елн| ре|бще|ник|ели|че |дви|еме|ира|жда|кри|лни| си|са | то|ой | ме|оет|гра|ход|дру|ичн|еди|дос|ста|дей|я н| къ|ан |ико|чре|й н|ави|нал|пос|тъп|ра |азо|зов|рез|той| со|меж|тно|т в|и у|нет|нич|кон|клю|люч|нео|чит|ита|а у|а м|дно|оят|елс|лит|ине|таз|ази| мо|що |т и|изв|тви|чен\",\"kaz\":\"ен |не | құ|тар|ұқы| ба| қа|ға |ада|дам|құқ|ық | ад| бо|ына|ықт|қта| жә|ар |ың |ылы|жән|әне|мен| не|лық|на |р а|де |ін |ары|а қ| жа|ан | әр|қыл|ала|ара| ме|уға|н қ|еме|ның| де|іне|ам |асы|тан|лы |әр |да |ста|нды|еке|ығы| өз|ған|анд|ын | бі|мес| қо|бол|бас|ің |ды |етт|ып |ілі|н б|нде|ері|е қ|қық|бір|лар|алы|нем|есе|се |а ж|ы б| ке|тын| ар|е б|бар|ге |ост| ти|тиі|олы|ік |інд| та|аты|сы |е а|дық| бе|ы т|нда| те|ры |ғы |бос|ғын|луы|иіс|сын|рде|рын|еті|қығ|алу|іс |рін|іні|е ж|дар|ім |егі|н к|қар| ер|тті|н ж|ыры|аны|лға| са|уын|ынд|ыны|ы м|рға|ген|ей |тік|тер|нің|ана|уы |аза| от|нан| на|е н|гіз|тық|мыс|ы ә|мны|м б|өзі|сқа|қа |е т|ң қ|еге|ке |ард|нег|луғ|лан|амн|кін|і б|асқ|рал|ті |ру |айд|тта| же|а б|р м|рды|кет|аса|ді |өз |ама|дей|н н|тыр|ауд|ігі|лып| мү| ал|зін|лік|дай|мет|жас|бер|тең|арқ|рқы|а о|е ө|қам|елі|рлы|ы а|а т|дер|біл|р б|еле|қор|ден|тін|уда| тү| жү|кел|і т|ір |лге|ы ж|ең |а д|тты|оны|гін| ха|ркі|лде|е м|н т|түр|оға|ікт|кті|зде|жағ|уге|ауы|рыл|ұлт|лтт| ос|осы| то|ция|ы е|н а|ау | ау|ені| ел|н е|оты|шін|ыс |қты|імд| да|сіз|лма|кім|ң б|лім|қат|зі |орғ| әл|хал|ерк|ек |құр|тте|е д|ағд|ғда|елг| ас|ірі| ұл|ағы|амд|тал| со|рып|ылм|лін|ным|мас|сыз|дан|із |ірд|ай |гі |сты|ым‐|ң ж|с б\"},\"Arabic\":{\"arb\":\" ال|ية | في|في |الح| وا|وال| أو|ة ا|أو |الم|الت|لحق|حق |كل |لى |ان |ة و|الأ| لك|لكل|ن ا|ها |ق ف|ات |مة |اء |ما |و ا|ون |ته |الع|أن |ي ا|ي أ|شخص|ة ل|الإ| عل| أن|م ا|حري|الا|من |على|حقو|قوق|ت ا| شخ|لا |ق ا| لل|فرد|رد | أي|أي |رية| كا|د ا| ول| من| إل|خص |ا ا|وق |نسا|ل ف|ا ي|ه ا|ة أ|كان|ن ي|امة|جتم| حق|الق|ام |دة | لا|ل ش|إنس|سان|ين |ة م|اية|ن ت|ا ل|ذا | فر|ن أ|هذا|لة |اً | عن|ى ا|لتع|اسي| دو| حر|ع ا|ه ل|لك |ه و|ترا|له |ماع|د أ|ي ح|إلى|الج|الد|، و| با|ن و|ي ت|نون|لعا|مع | هذ|ة ع|لحر|يات|عية|ص ا| وي|لإن|لأس|أسا|ساس|سية|بال|ي و|حما|ماي| إن|الف|انو|ير |رام|ا و|عام|دول|مل |الو| مت| له|الب|ساو|ة ب|هم |ع ب|علي|ك ا|لقا|قان|تما|ة ت|ى أ|ول |ة ف|ا ب|اد |الر|ل و|ل ا|انت| قد|لجم|لمي|لتم|تمت|اعي|ليه|لمج|ه أ|ا ك|ال |لأم|لمت|لإع| يج|لدو|ق و|ريا|يه |رة |ن ل|دون|تمي|كرا|يد |ذلك| يع|ر ا|تعل|عال|تسا|لاد|اة |قدم|متع|تع |اجت| كل|مان|غير|اته|م و|مجت|تمع| مع|مم |لان|يجو|جوز|وز |عمل|دم |فيه|الض|ميي|ييز|متس| عا|أسر|ن م|معي|لات| مس|لاج|عن |ي إ|ليم|يم | أس| تع|يز |مية|جمي|ميع|الش|اعا|ة، |الس|شتر|لمس|لما|ني |لي |يها|ملا|ود |تي |لضم|ضما|اعت|ر و|اق |ي م|ي ي| بح| تم|تنا|أمم|تحد|حدة|إعل|علا|ه ع| جم|عة |م ب|ولم|الن|ل إ| به|ب ا|اوي|قد |أية|قيد|د ب|اك |وية|إلي|لزو|د م|مست|كاف|وله|ه ف| ذل| وس|لحم|نت | أم| مر|مرا| وأ| وع\",\"urd\":\"ور | او|اور|کے | کے| کی|یں | کا|کی | حق|ے ک|کا | کو|یا |نے | اس|سے |ئے |کو | ہے|میں| می|ے ا| کر| ان|وں | ہو|اس |ر ا| شخ|شخص|ی ا| جا| سے|حق |ہر |خص |ے م|ام | یا|ں ک|ہیں|سی | آز|آزا|زاد|ادی|ائے|ہ ا|ص ک|ا ح|جائ|ہے |کہ |ر ش|ت ک| پر|ی ک|م ک|۔ہر|پر |ا ج|ان |دی |س ک|ق ہ|ہے۔|ر م|ں ا|ی ح|و ا|ار |ری |ن ک|کسی|حقو|قوق| مع|ے گ|ی ج|وق | ہی|ر ک|سان|نی |کرن| حا| نہ|تی |ی ت| جو|ئی |انس|نسا| کہ|اپن|ل ک|جو | اپ|ے ب|یت |نہ |ہ ک| مل|ہو |می |ل ہ|رے |ی ش|رنے|ے ل|ے ہ| کس| ای|ا ا|۔ ا|حاص|اصل|صل |معا|نہی|ی م|وہ |یں۔| تع|انہ|ق ک|د ک|ی ب|ات |ملک|ایس|ی ہ| بن| قو|قوم|کیا|ے، |عاش|اشر|ر ہ| گا| دو|یہ |وام|دہ |ں م|ا م| من|بر |انی|ے۔ہ|ر ب|دار|ے ج| وہ| لئ|لئے| عا|اقو|قوا|مل |ائی|علا|اد |ی س| جس|ر ن|ے ح|ہ م|کر |و ت|لیم| و | قا|انو|ا ہ|جس |یوں| یہ|لک |ریق|ے۔ |نیا|تعل| گی|گی |ر پ|دوس|ی آ|یم |، ا| اق|وئی|یر |پنے|ے پ|م ا|گا۔|یاد| رک|علی| مس|ی، |ین |ن ا|انے|وری|ی ن|لاق|ر ع|ون |خلا| با|ا س| سک| دی| چا|رائ|ومی|ہ و|نا |اری| بر|رکھ|ندگ|دگی|ر س|رتی| بی| شا|س م|ق ح|ادا| مم| ہر|ا پ|و گ|وسر|سب | پو|قان|نون| بھ|ے خ|اف | اع| مر|یسے| پی|غیر|ے س|ال |ت ا|، م| مح|ں، |بنی| ذر|ذری|ریع|ہوں| عل|تما|مام|ونک|نکہ|دان|پنی|ر ح| ام|من |عام|پور| طر|ے ع|ائد|بھی|ھی | مت| مق|د ا| خل|لاف|اعل|کوئ| لی|و ک|ے ی|ا ک|ر آ|دیو|اں |چون|، چ|یاس|برا|کرے|ی ع|ر ج\",\"fas\":\" و | حق| با|که | که|ند | در|در |رد | دا|دار|از |هر | از|یت | هر|ر ک|حق |د ه|ای |ان |د و| را|ود |ین |یا |ارد|کس |ی و|را | یا| کس| بر|باش|د ک|ه ب| آز|آزا| خو|ه ا| اس|د ب|زاد|ار | آن|ق د|شد |حقو|قوق|ی ب|ه د|ده |وق |ید |ی ک|ر م|خود|ور |و ا|رای|اشد|ام |تما| اج|ری |ادی|س ح|دی |اید|است| ان|نه |و م|د ا|ر ا| بی|با |انه|ی ا|د، |ون | تا| هم| نم|ات |مای|ا ب|ایت|ر ب| بش| کن|انو|اسا| مر|ست | مو| مل|برا|وان|این|جتم| می|ورد| شو| ای|ن ا| اع| به|ت و|، ا|اجت|ماع|عی |ا م|ائی|ئی |و ب|نی |ملل|ت ا|و آ|آن |بشر| زن|ی، |کند|ن م|ن و|بای|شود|ی ی|های| من|شور| مس|کار|ت ب| بد|دان|اری|اعی|د آ|مل |ز آ|یگر|ی ر|ت م|مور| گر|گرد| مق|توا|ی م|علا|یه |ن ب|میت| شد| کش|کشو|ه و|ق م|د ش| مج| اح|ن ت|و د| حم|لی | کا|ت ک|هٔ |نون|مین|دیگ| عم|انی|ر خ|ه م| مت|ن ح|ی د|لام|رند|اه |نجا|بعی|نوا|ساس|ساو|د م| آم|ادا|وی |گی |هد |ا ک|اد |ی ح| مح| قا|قان|می |یده|مقا|لل |ر ش|ق و|اعل|ا د|شده|ع ا| بع|اسی|د ت|همه|سان|شر | عق|ر و|دگی|حما|ا ه|خوا|‌ها|ه‌ا| او|او |اده|اً |ر ت| دی|ومی| شر|نمی|بر | هی|هیچ|یر |ز ح|مند|بین|تی |جا |عقی|یتو|م و|مسا|و ت|سی |اوی|بهر|م م|ر د|انت|زش |ارن|زند|ندگ|و ه|رفت|رار|واه|ا ر| بو|تأ|أم|ٔمی|ران|عمو|موم|ی ن|اند|ل م|ردد|ه ح|عیت| فر| بم|دیه|ا ا|نما|آنج|کلی|احد|حدی|مال| تع|و ح|مرد|ت، |ملی|ق ا|واد|م ا|د د| خا| ار|اشن|شند\",\"zlm\":\" دا|ان |دان| بر| او|ن س|له | ڤر|كن |ن ك|دال|ن ا|ن د|رڠ |حق |يڠ | كڤ|ارا| يڠ|أن |تيا|ڤد |ورڠ|ڠن |اله|ياڤ| تر|ولي|ن ڤ|اور|كڤد|برح|رحق|ين |ستي|اڤ |را |ليه| ات|ه ب| ست|يه |اتا| عد|عدا|ن ب|تاو|ڤ ا|او |ن ت|بيب|يبس|سي | كب|ه د|ن م| من| سو| سا| حق|ق ك|اسا|سام| تي|ن ي|الم|لم | اي|ن، |رن |اتو| ما|د س| با|باڬ|نڬا|ڬار| مم|كبي|بسن|سن |اين|ڠ ع|ڽ س|چار| سب|ي د|ندق|د ڤ|اڽ |اڬي|سبا| ڤم| د |نسي|ا ڤ|هن |قله|يند|تا |ي ا|ام | بو|ڬي | نڬ|اون|تن |وان|ا س|مأن|أنس|ڠ ب| كس| سم| سچ|سچا|ا ب|بول| مأ|سيا|ساس|اسي| ڤڠ|بڠس| دڠ|دڠن| ڤو|ڤا |ت د|رتا| هن|هند|دقل|ي م| اس|ادي|نڽ |ات |تره|رها|هاد|ادڤ| لا|تي |ڤرل|مان|، ك|بار|ارڠ|ق م|ڤون|ون |، د|اي |اول|ق٢ |٢ د|ڠسا|تو |يكن|وين|ن ه|اكن|يأن|وڠن|دڤ |وا |ا د|ن٢ |نتو|وق | سس|ماس|اس |ه م|مرا|ندو| ان| بي| مڠ|ڠ٢ |ائن|رات|يك |حق٢|برس|اد |ي س| كو|مڤو|ري | مل|وات|واس|ڤمب|، ت| سر|سرت|امر|سمو|اڬا|رلي|لين|دوڠ|ل د|تار|ڠ م|، س|وند|ي ك|لوا|سوا|ارك|تيك|ڤري|رسا|ياد|ريك|ا، |ونت|ڠ ت|ترم|ڤرا|سأن|اڤا|ي ڤ|ا ا| در|رأن| ڤن|سوس|ورو|ڠ س|لائ| بڠ|٢ ب|توق|دير|يري|وكن|جوا|هار|ندي|ارأ|وه |كرج|ڠڬو|ي، |موا| كأ|اجر|جرن| به|بها| مر|راس| كم|و ك|نن |ڤرك|ندڠ|دڠ٢|ا م| سڤ|ا٢ |سات|ق ا|ڤ٢ |شته|تها|سال|ينڠ|سسي|وهن|مول|منو|وبو| دل|وار|كور|د ك|ا ك| ڤل|لاج|ڠ ا|مبي|نتي|تيڠ|وسي|يال|ال |انت|نتا|بس |هڽ |ن ح|ه ا|كڤر|ڠ د|م س\",\"skr\":\"تے |اں | تے|دے |دی |وں | دا| کو| حق|کوں|ے ا| دے|دا | دی|یاں| کی|ے ۔|یں |ہر | ۔ | ہے|ہے | وچ|کیت| ان|وچ | شخ|شخص|ال |ادی| حا|اصل| نا|ے م|خص |ں د|حق |حاص|صل |یا | ای|ل ہ|اتے|ق ح|ے و| ات|ں ک|سی |ہیں| مل|ی ت|نال| از|ازا|زاد| او|حقو|قوق|ار |ا ح| ۔ہ|۔ہر|ر ش|ے ج|ص ک|وق |دیا|نہ |یند|ندے| یا| کر|ئے | جو|کہی|ی د|انس|نسا|سان|وند|ی ا|یتے|و ڄ|ڻ د|یسی| وی|ا ا|ملک|ے ح|ے ک| ہو|ے ب|ں ا|ا و|ئی |ر ک|تی |آپڻ|وڻ |ندی| نہ|ویس| آپ| جی|اون| کن|انہ|ن ۔|جو |ی ن|ان | کہ|ری | تھ|ے ہ| ڄئ|۔ ا|ے ن|ی ۔|ڻے | ہر|ام |دہ |ں ت|ں و|ں م|تھی| من|کو |ی ح|کنو|نوں|ہاں| بچ|ے ت|رے |ون |ی ک|ور |ہکو|نی |یاد|ت د|یتا|ی ہ|نہا|ن د|اری|تا |لے |ڄئے|ے د| ہک| قو|پڻے|می |ی م|قوا|وام| ون|ق ت|اف |ل ک|اے | تع|ین |چ ا|خلا|ل ت|لک |ہو |ارے| و |انی|جیا|ے س| سا|ن ا|دار|یت |ی ج|ئو |ی و| اق|علا|کرڻ|ونڄ|ات | اے|ر ت|ق د|الا|ہوو| چا| رک|بچئ|چئو|وری| وس| لو| پو|پور|قنو|نون|ہ د|ے خ|ایہ|و ا|این| ڋو| خل|لاف|ڻ ک| جا| ۔ک| عز|عزت|ا ک| مع|ے ع|یر |قوم|ں آ|او |اد |ب د|ریا|مل |رکھ|وسی|سیب|یب |کاں| قن|اقو|رڻ |وئی|ں ج|ا ت|ل ا|زت |ت ت|ر ا| سی|لا |وے |ہی |ا م|ے ر|تعل|ں س| سم|یوڻ|ر ہ|ڻی |اوڻ|لوک|م م| مت|متح|تحد|حدہ|ایں| اع|ے ذ| جھ|جھی|کوئ|کار| کھ|ہ ا|ھین|م ت| کم| ہن|ہن |ی، |ں ب|د ا|سار|ن ک|علی|لیم|نڄے|ڄے |ی س|یہو|ھیو|ائد|و ک|ائی|ے ق| مط| سڱ|سڱد| ذر|ذری|ھیا|نے |کیو\",\"pbu\":\" د | او|او |په | په| چې|چې | حق|ي ا|ره |ې د|نه |و ا|و د|ه ا|هر |ه و| څو|ه د|ري |حق |ي چ| کښ|څوک|وک |وي | شي|له |غه |کښې|ښې | سر| لر|لري|و پ|ه پ|ټول|لو |يت |سره|کړي|ي۔ه|ه ک|ي، |ر څ| ټو|ق ل| له|يا | هغ| از|۔هر|د م|ازا| کړ|دي |هغه| کو|نو |د ا|حقو|قوق|زاد|ه ت| پر| وا|ولو|خه |ه ه| وي| څخ|يو |ه م| يا|ول |د د|څخه| دي|ه ش|کول|ي د|ته |ه ب|ګه |و ي|ړي |اد |و م|ونو|شي۔|د ه|دې |خپل|واد| مل| هي| نه| تر| تو|د پ|ک ح|ې پ|ان |ولن|ني |ه ح|يوا|تون| با|ادي| هر| يو| مس|ي و|ې ا|لي |ې و|ي پ|د ت|يد |امي|وقو|شي |ړي۔|دان|انه|وګه| عم|هيو| دا| دغ|قو |ي۔ |ه چ|ار | خپ|بشر|توګ|اند|هغو|لني|باي|ايد| ده|ه ن|وي،|و ه|، د|ي ح| بر|غو | تا|ين |ايت| شو|شوي|دغه|مي |م د|دهغ| من|و ح| لا| ډو|ډول|بعي|پل | بش| ته|اوي|ه ګ|د ب|نيز|پر |ده |و ت|انو|نون|ون |ومي|رو |هيڅ|يڅ |ي ت|علا|ه ي|ه ل|وم |کار|ساو|تر |وند|ونه|يه |ن ک|مين|موم|و ک|اتو| اع|اعل|لام|اره| ځا|مسا| ان|د ټ|ټه | ګټ|ي ش| بي| مح|قان| پي|و ر|اخل|تو |اسي|سي | وک|ديو|ځاي|عقي| ور|لان|ل ت|ه س|ې چ| وس|و س|وون| ژو|ژون|يز |وکړ|کي |ن ش|ندې|ک د| اس| قا| نو|عمو|لتو|و ب|پار|ولے|لے |ې ک| عق|۔هي|څ څ| را|بل | بل|وسي|ت ا|ر د| ار| هم|هم |دو |ي م|مان|اسا|رته|شري|ا د|ر م|ښوو| رو|ګټه| غو|ونک| وړ|مل | شخ|شخص| اج|د ق|تام|وق |ملت|و ن|من |و څ|ا ب|ن ا|قيد| چا|ل ه| تب|تبع|ر پ|حما| کا|د خ|ر س|اني|نځ \"},\"Devanagari\":{\"hin\":\"के |प्र| के| और|और |ों | का|कार| प्|का | को|ं क|या |ति |ार |को | है|िका|ने |है |्रत| अध|धिक|की |अधि|ा क| कि| की| सम|ें |व्य|्ति|क्त|से | व्|्यक|ा अ|में|मान|ि क| स्| मे|सी |न्त|े क| हो|ता |यक्|ै ।|क्ष|त्य|िक | कर| या|्य |भी | वि|रत्|ी स| जा|र स|्ये|येक|ेक |रों|स्व|िया|ा ज|त्र|क व|र ह| अन|्रा|ित |किस|ा स|िसी|ा ह| से|ना |र क| पर| सा|गा |देश| । | अप|ान |समा|्त |े स|्त्|ी क|ा प| ।प|वार| रा|न क|षा |अन्|।प्|था |ष्ट| मा|्षा|्वा|ारो|तन्| इस|े अ|ाप्|प्त|राष|ाष्|्ट्|ट्र|्वत|वतन| उस|राप|त ह|कि | सं|ं औ|हो | दे|किय|ा ।|े प|ार्| भी|करन| न |री |र अ|जाए|क स|ी प|िवा|सभी|्तर|अपन| नि| तथ|तथा|रा |यों|े व|ाओं|ओं |पर |सम्|्री|ीय |सके|व क| द्|द्व|ारा|िए | ऐस|रता| सभ|िक्|ो स|रक्|र प|माज|्या|होग|र उ|ा व|रने| जि|ं म|े म|ाव |ाएग| भा|पने| लि|स्थ|पूर|इस |त क|ाने|रूप|भाव|लिए|े ल|कृत|र्व|ा औ|ो प|द्ध| घो|घोष|श्य|ेश |। इ| रू|ूप |एगा|शिक|े ब|दी | उन|रीय|रति|ूर्|न्य|्ध |णा |ी र|ं स|र्य|य क|परा| पा|े औ|ी अ|ेशो|शों|ानव|ियो|म क| शि| सु|तर्|जो |्र |तिक|सार|चित| पू|ी भ|जिस|ा उ|दिय|राध|चार|र द|विश|स्त|ारी|परि| जन|वाह|नव | बु|म्म|ले |्म |र्ण| जो|ानू|नून|िश्|गी |साम|ोगा|रका|्रो|ोषण|षणा|ाना|ो क|े य| यह|चूं|ूंक|ंकि|अपर|कोई|ोई |ाह |ी म| ।क|ी न|ा ग|ध क|े ज|न स|बन्|निय|याद|ादी|्मा| सद|जीव|हित|य ह|कर |ास |ी ज|ाज |ं न|्था|ामा|कता\",\"mar\":\"्या|या |त्य|याच|चा | व |ण्य|प्र|कार|ाचा| प्|धिक|िका| अध|च्य|अधि|ार | आह|आहे|हे |ा अ| स्|्रत|स्व|्ये|ा क| कर|्वा|ता |ास | त्|ा स|त्र|ा व|िक |यां|ांच|वा |मान| या|्य | अस| का|रत्|ष्ट|येक|ल्य|र्य|र आ|ाहि|क्ष| सं| को|कोण|ामा|ाच्|ात | रा|ा न|ेका| सा|ून |ंत्| मा|चे |तंत|राष|ाष्|्ट्|ट्र|ने |े स|वात|करण| कि|किं|िंव|ंवा|व्य|ा प|कास|ना | मि| सम|क्त|ये |मिळ|समा|र्व|ातं|्र्|े प| जा|यास|व स|ोणत|ीय |ा आ|रण्|काम| दे|ांन|े क|ा म|रां| व्|्यक|हि |ान | पा|्षण|िळण| आप|ार्|ही |े अ|ा द|ली |ळण्|े व|ची | आण|ंच्| वि|ारा|्रा|ाही|मा |ा ह|द्ध|्री| नि|णे |ला | सर|सर्| नय|नये|ाचे|ी अ|्व |ंना|षण |आपल|ले |माज|बंध|ी प|्त |त क|लेल| हो|ील | शि|शिक|ध्य|ी स|आणि|णि |े ज|देश|न क|ानव|पाह|हिज|िजे|जे |रीय|क स|व त|यक्|ा ज|यात|िक्|त स|े आ|रक्|पल्|वी |संब|ंबं|न्य| ज्|ज्य|स्थ| के|्वत|असल| उप|य अ|क व|त्व|ीत |त व|केल|ाने|य क|णत्|ासा|रति|भाव|े त|व म|ेण्|िष्|साम|क आ|सार|कां|याय|साठ|ाठी|ठी |े य|ंचा|करत|रता|र व|्ती|ीने|याह|र्थ|च्छ|ी आ|स स|ोणा|संर|ंरक|त आ|ंधा|ायद|ी व|ेशा|ित | अश|जाह|हीर|तील|ा ब| अथ|अथव|थवा|ी म|स्त|ा त|ती |नवी|ाची|िवा|देण|याव|ांत|ण म|व आ|य व| हक|हक्|क्क|ा य|ेत |वस्|पूर|ूर्|ारण|द्य|ंचे|ेले|ेल्|कृत|शा |तीन| अर|अर्|्थी|थी |्रद|राध|यत्|ाला|तिष|ष्ठ|श्र|ण स|रून| आल|्ध |सले|े म| शा|्रक|रका|तिक|ाजि|जिक|्क |ाजा| इत|इतर|तो |साध\",\"mai\":\"ाक |प्र|कार|धिक|िका|ार | आʼ|आʼ |्रत|ेँ |्यक|क अ|िक |्ति| अध|व्य|अधि|क स| प्| व्|क्त|केँ|यक्|तिक|हि | स्|न्त|क व|मे |बाक| सम|मान|त्य|क्ष| छै|छैक|ेक |रत्|स्व|त्र|्ये|येक| अप|ष्ट|सँ |र छ|ैक।| वि| एह|वा |ित |ति |िके|ट्र| जा|्त्|राष|ाष्|्ट्| हो| सा| रा|्य | अन|अपन| कर|।प्|कोन| अछ|अछि|क आ|्वत|वतन|तन्| पर|था | को| वा|ताक|ार्|एहि|पन |ा आ|नहि| मा|्री|समा|नो |रता| दे|्षा|रक |देश|क प| नि| नह| कए| का|छि |न्य|्त |ि क| सं|ोनो| तथ|तथा|्वा|ारक|ान्|ल ज|ा स|ान |िवा|क ह|ीय |र आ| आ |्या|ँ क|वार|ता |ना |जाए| जे|करब| एक| आओ|आओर|ओर |ानव|परि|ँ अ|रीय|ा प|धार|ारण|स्थ|माज|साम|ामा|्रस|र्व|कएल|घोष|अन्|्तर|त क|स्त| सभ|्रा|रण |ँ स|द्ध|एबा|नक |ा अ|िक्|षा |रक्|क।प|ʼ स|चित|पूर|ʼ अ|यक |ाहि|रबा|क ज|कर | घो|ोषण|सम्|र प| हे|हेत|ेतु|तु |शिक|त अ| उप| अव|ूर्|एल |िमे|एहन|हन |षणा|ाधि|सभ |च्छ|अनु| शि|ेल |रूप|क क|भाव|प्त|्ध |ि ज|वक | सक|र अ|रति|निर|िर्|जाह|हो |ँ ए|े स|होए|चार|ण स|र्य|ि आ|सभक|्रक|ाजि|जिक|ाप्|र्ण|त स|क उ|रा |त आ|एत।|त ह| जन|ैक |विव|ोएत|वाध|क ब|री |न प| भा|य आ|राप| ओ |न व|ʼ प|्ण |न अ|कृत|िश्|ा व|कान|ारा|ि स|हु |रसं| उद|उद्|श्य|ाएत|िसँ|जे |ि घ|जेँ| कि|कि |ेश |केओ|ेओ |त्त|सार|क ए|रिव|वास|य प|्थि|विश|ओ व|यता|पर | भे|क ल|नवा| बी| सह|िष्|ि द| रू| ले| पए|पएब| अथ|अथव|थवा|क र|न स|हिम|ास |ए स|ि अ| दो|षाक| पू| द्|द्व|धक \",\"bho\":\" के|के |ार |े क|कार|धिक|िका|ओर | आओ|आओर| अध|अधि|े स|ा क|े अ| सं|र क| हो| मे|में|ें |र स|िक | कर|र ह|ा स| से|मान| सम|न क|रा |से |क्ष|े ब|नो |वे | चा|ता |्रा| रा|ति |खे |चाह|ष्ट| सा|राष|ाष्|प्र| का| मा|्ट्|ट्र|े आ| प्| सक| स्| जा| बा|पन |था |त क|ि क|कौन|ौनो|करे|होख| कौ|ेला|्त |ाति|ला |तथा| आप| ओक|आपन|रे |र म| तथ|सबह| हव|हवे|र आ|कर |ोखे|जा |े ओ|तिर|िर |बहि| ह।|ही |सके|केल|ना |हे | और|त्र|ान | खा|खात|।सब| पर|े म|े च|ा आ|षा |ावे|र ब|न स|ओकर|ी क| लो|ाहे|ल ज| सब|्षा|संग|ं क|ित |माज|मिल|े ज|रक्|हिं|िं |ा प|वे।|े ह|ाज |और |स्व|ंत्|ला।|ो स| नइ|नइख|इखे|हु |ानव|िया|्र |लोग|क स|समा|कान|क्त| जे|करा|्रत|े। | ओ |ी स|े न|्री|रीय|पर |े उ|ाही|ानू|नून|स्थ|े व|ाम |्वत|वतं|तंत|रता|केह|या |े ख|। स| सु|प्त| दे|े त|साम|र अ|ीय |र प|बा।|ा।स|सभे|भे | वि|योग|दी | आद|ून |ा म|्य |व्य|ए क|ेहु| या|री |र न| बि|राप|ाप्|ु क| मि|यता|आदि|दिम|मी |नवा|ाधि|े द|चार|ले | नि| पा|ोग | ही| दो|ादी|हि |तिक|पूर| इ |ा ह|्ति|ल ह|खल |ाव | अप| सभ|िमी|देश|ुक्| सह|शिक|िक्|ि म|जे |षण |ाजि|जिक|क आ|्तर|े प| उप|जाद|े भ|्या| जर|म क|ेकर| अं|े र|।के|न आ|सब |साथ|ंगठ|गठन|ठन |रो | जी|ा। |्म |ी ब|हो |न ह|े ल|न म|वाध|निय|ेश | शि|ज क| ले|ने |बा |संर|ंरक|्षण|ामा|य क|ास |उपय|पयो|दोस| आज|आजा| भी| उच|चित|र व| पू| घो|घोष| व्| शा|िल |ा।क| कई| को|होए|्थि\",\"nep\":\"को | र |कार|प्र|ार |ने |िका|क्त|्यक|धिक|व्य| गर| प्|्रत|अधि|्ति| अध| व्|यक्|मा |िक |ाई |त्य|न्त|लाई|मान| सम|त्र|गर्|र्न|क व|्ने| वा|वा | स्|रत्|र स|्ये|येक|ेक |छ ।|तिल|हरू|क्ष|ो स| वि|ा स|्त्|िला| । |स्व|हुन|ति | हु| मा| रा|ले |र छ| छ |ष्ट|समा|वतन|तन्|्ट्|ट्र| सं|ो अ|राष|ाष्|्वत|नेछ|ुने|ान |े अ|ता | का|्र |हरु|गरि|ाको|िने| अन|ना | नि|े छ| सा|क स|तिक|ित |नै |र र|रता|रू |था |ा र|कुन|ुनै|ा अ|स्त|्त | छै|छैन| तथ|तथा|ा प|ार्|वार| पर|ा व|एको|्षा|परि|रक्|। प|माज|रु |द्ध|का |्या|ो प|ामा|्रा|सको|ेछ | ला|धार|नि |ाहर|देश| यस|र ह|िवा|सबै|र म|भाव|्य |र व|रहर|रको|न अ|सम्|े र|संर|ंरक|अन्|ताक|्रि|्वा|ा भ|त र| कु| त्|री |ो व|न स|रिन|लाग|ारक|ानव| सब| शि|शिक|िक्|ै व|रिय|रा |ा न|पनि|ारा|श्य|ा त|्यस|यस्|ाउन|्न | अप|चार|ाव | भए|ारम| सु|ुद्|षा |ि र|रूक| सह|बाट|्षण|साम|्तर|िय |रति|ो आ|र प|ो ल|कान|द्व|ुक्|ान्| उप|द्द|ुन |ैन |ेछ।|ैन।|ारह| भे|ागि|गि |निज|वाह|्ध |र्य| आध|रमा|ा म|नको|बै |न ग|ाट |।प्|ाजि|जिक|त्प|िको|ाय |र त|ात्| उस|ूर्| अभ| अर|जको|स्थ| आव|त स|ित्| पन|िएक|्तो|तो | पा|ा ग| भन|ानु|परा|राध| छ।| मत|अपर|भेद|ि स|रुद|ो ह|रिव|रका|न्य| जन|यता|े स|र्म|ारी| दि|क अ|नमा|ूको|हित|ा क|क र|र अ|ा ब|उसक|पूर|त्व|र्द|सार|णको|युक|।कु|विध| घो|घोष| सक|भएक|नुन|्यह|ि व|ो भ| पु| मन|नी |विच| दे|राज|विर|िरु|काम|र न|यहर|िश्\"}}");
-
-/***/ }),
-
-/***/ 9248:
-/***/ ((module) => {
-
-"use strict";
-module.exports = JSON.parse("{\"name\":\"got\",\"version\":\"6.7.1\",\"description\":\"Simplified HTTP requests\",\"license\":\"MIT\",\"repository\":\"sindresorhus/got\",\"maintainers\":[{\"name\":\"Sindre Sorhus\",\"email\":\"sindresorhus@gmail.com\",\"url\":\"sindresorhus.com\"},{\"name\":\"Vsevolod Strukchinsky\",\"email\":\"floatdrop@gmail.com\",\"url\":\"github.com/floatdrop\"}],\"engines\":{\"node\":\">=4\"},\"browser\":{\"unzip-response\":false},\"scripts\":{\"test\":\"xo && nyc ava\",\"coveralls\":\"nyc report --reporter=text-lcov | coveralls\"},\"files\":[\"index.js\"],\"keywords\":[\"http\",\"https\",\"get\",\"got\",\"url\",\"uri\",\"request\",\"util\",\"utility\",\"simple\",\"curl\",\"wget\",\"fetch\"],\"dependencies\":{\"create-error-class\":\"^3.0.0\",\"duplexer3\":\"^0.1.4\",\"get-stream\":\"^3.0.0\",\"is-redirect\":\"^1.0.0\",\"is-retry-allowed\":\"^1.0.0\",\"is-stream\":\"^1.0.0\",\"lowercase-keys\":\"^1.0.0\",\"safe-buffer\":\"^5.0.1\",\"timed-out\":\"^4.0.0\",\"unzip-response\":\"^2.0.1\",\"url-parse-lax\":\"^1.0.0\"},\"devDependencies\":{\"ava\":\"^0.17.0\",\"coveralls\":\"^2.11.4\",\"form-data\":\"^2.1.1\",\"get-port\":\"^2.0.0\",\"into-stream\":\"^3.0.0\",\"nyc\":\"^10.0.0\",\"pem\":\"^1.4.4\",\"pify\":\"^2.3.0\",\"tempfile\":\"^1.1.1\",\"xo\":\"*\"},\"xo\":{\"esnext\":true},\"ava\":{\"concurrency\":4}}");
 
 /***/ }),
 
@@ -10131,27 +14036,11 @@ module.exports = require("buffer");;
 
 /***/ }),
 
-/***/ 3129:
+/***/ 881:
 /***/ ((module) => {
 
 "use strict";
-module.exports = require("child_process");;
-
-/***/ }),
-
-/***/ 7619:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("constants");;
-
-/***/ }),
-
-/***/ 6417:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("crypto");;
+module.exports = require("dns");;
 
 /***/ }),
 
@@ -10176,6 +14065,14 @@ module.exports = require("fs");;
 
 "use strict";
 module.exports = require("http");;
+
+/***/ }),
+
+/***/ 7565:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("http2");;
 
 /***/ }),
 
@@ -10248,14 +14145,6 @@ module.exports = require("url");;
 
 "use strict";
 module.exports = require("util");;
-
-/***/ }),
-
-/***/ 2184:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("vm");;
 
 /***/ }),
 

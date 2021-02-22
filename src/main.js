@@ -1,8 +1,7 @@
 const core = require('@actions/core');
 const { Octokit } = require('@octokit/rest');
 const github = require('@actions/github');
-const franc = require('franc-min');
-const translate = require('google-translate-api');
+const translate = require('@iamtraction/google-translate');
 
 // **********************************************************
 const token = core.getInput('token');
@@ -17,9 +16,6 @@ async function run() {
       context.payload.action == 'opened'
     ) {
       const isPR = context.eventName === 'pull_request';
-      let number;
-      let title;
-      let body;
       if (!isPR) {
         number = context.payload.issue.number;
         title = context.payload.issue.title;
@@ -64,13 +60,10 @@ async function run() {
 }
 
 function checkIsEn(body) {
-  const result = franc(body);
-  if (result === 'und' || result === undefined || result === null) {
-    core.warning(`Some error. [check: ${check}] [${body}]`);
-    return false;
-  }
+  var en = /^[a-zA-Z0-9. -_?]*$/;
+  const result = en.test(body);
   core.info(`[CheckIsEn] [${body} is ${result}]`);
-  return result === 'eng';
+  return result;
 }
 
 run();
