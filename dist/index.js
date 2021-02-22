@@ -13963,8 +13963,8 @@ async function run() {
         body = context.payload.issue.body;
       } else {
         number = context.payload.pull_request.number;
-        title = context.payload.pull_request.number;
-        body = context.payload.pull_request.number;
+        title = context.payload.pull_request.title;
+        body = context.payload.pull_request.body;
       }
 
       if (!checkIsEn(title)) {
