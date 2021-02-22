@@ -12,7 +12,9 @@ async function run() {
   try {
     const { owner, repo } = context.repo;
     if (
-      (context.eventName === 'issues' || context.eventName === 'pull_request') &&
+      (context.eventName === 'issues' ||
+        context.eventName === 'pull_request' ||
+        context.eventName === 'pull_request_target') &&
       context.payload.action == 'opened'
     ) {
       const isPR = context.eventName === 'pull_request';
@@ -51,7 +53,7 @@ async function run() {
       }
     } else {
       core.setFailed(
-        'This Action now only support "issues" or "pull_request" "opened". If you need other, you can open a issue to https://github.com/actions-cool/translation-helper',
+        'This Action now only support "issues" or "pull_request" or "pull_request_target" "opened". If you need other, you can open a issue to https://github.com/actions-cool/translation-helper',
       );
     }
   } catch (error) {

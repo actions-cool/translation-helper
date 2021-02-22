@@ -14,7 +14,7 @@ Currently, only translations of newly opened issues or PRs have been produced, a
 name: Translation Helper
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
   issues:
     types: [opened]
