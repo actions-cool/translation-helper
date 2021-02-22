@@ -1,23 +1,19 @@
 # https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions
 name: 'Translation Helper'
-description: 'A simple javascript template for rapid development of GitHub actions.'
+description: 'A GitHub Action keep your issue or PR in line with international standards.'
 author: 'xrkffgg'
 
 branding:
   # https://feathericons.com/
   # e.g. https://haya14busa.github.io/github-action-brandings/
-  icon: 'file'
-  color: 'blue'
+  icon: 'thumbs-up'
+  color: 'red'
 
 inputs:
-  GITHUB_TOKEN:
+  token:
     description: Secret GitHub API token to use for making API requests.
     default: ${{ github.token }}
     required: true
-
-#outputs:
-#  result:
-#    description: action result
 
 runs:
   using: 'node12'
