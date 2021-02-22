@@ -1,7 +1,7 @@
 const core = require('@actions/core');
 const { Octokit } = require('@octokit/rest');
 const github = require('@actions/github');
-const translate = require('@iamtraction/google-translate');
+const translate = require('@xrkffgg/google-translate');
 
 // **********************************************************
 const token = core.getInput('token');
