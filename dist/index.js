@@ -13972,7 +13972,7 @@ async function run() {
       const translateTitle = core.getInput('translate-title') || 'true';
       const translateBody = core.getInput('translate-body') || 'true';
 
-      if (!checkIsEn(title) && translateTitle == 'true') {
+      if (translateTitle == 'true' && !checkIsEn(title)) {
         const { text: newTitle } = await translate(title, { to: 'en' });
         core.info(`[translate] [title out: ${newTitle}]`);
         await octokit.issues.update({
@@ -13984,7 +13984,7 @@ async function run() {
         core.info(`[update title] [number: ${number}]`);
       }
 
-      if (!checkIsEn(body) && translateBody == 'true') {
+      if (translateBody == 'true' && !checkIsEn(body)) {
         const { text: newBody } = await translate(body, { to: 'en' });
         core.info(`[translate] [body out: ${newBody}]`);
         await octokit.issues.createComment({
