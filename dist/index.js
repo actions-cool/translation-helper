@@ -13958,8 +13958,8 @@ async function run() {
         context.eventName === 'pull_request_target') &&
       context.payload.action == 'opened'
     ) {
-      const isPR = context.eventName === 'pull_request';
-      if (!isPR) {
+      const isIssue = context.eventName === 'issues';
+      if (isIssue) {
         number = context.payload.issue.number;
         title = context.payload.issue.title;
         body = context.payload.issue.body;
