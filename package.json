@@ -1,6 +1,6 @@
 {
   "name": "translation-helper",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "A GitHub Action keep your issue or PR in line with international standards.",
   "main": "src/main.js",
