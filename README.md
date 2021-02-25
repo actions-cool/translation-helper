@@ -39,7 +39,7 @@ You are very welcome to try it out and put forward your comments. You can use th
 - Report bugs or consult with [Issue](https://github.com/actions-cool/translation-helper/issues)
 - Submit [Pull Request](https://github.com/actions-cool/translation-helper/pulls) to improve the code of `translation-helper`
 
-也欢迎加入 钉钉交流群
+欢迎加入 钉钉交流群
 
 ![](https://github.com/actions-cool/resources/blob/main/dingding.jpeg?raw=true)
 
