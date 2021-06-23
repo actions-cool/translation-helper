@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.0
+
+`2021.06.23`
+
+- refactor: adjust translate judgment.
+
 ## v1.1.1
 
 `2021.02.25`

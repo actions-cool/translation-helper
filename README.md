@@ -23,7 +23,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-cool/translation-helper@v1.1.1
+      - uses: actions-cool/translation-helper@v1.2.0
 ```
 
 | Name | Desc | Type | Required |

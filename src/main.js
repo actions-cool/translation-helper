@@ -31,7 +31,7 @@ async function run() {
       const translateTitle = core.getInput('translate-title') || 'true';
       const translateBody = core.getInput('translate-body') || 'true';
 
-      if (translateTitle == 'true' && !checkIsEn(title)) {
+      if (translateTitle == 'true' && containsChinese(title)) {
         const { text: newTitle } = await translate(title, { to: 'en' });
         core.info(`[translate] [title out: ${newTitle}]`);
         await octokit.issues.update({
@@ -43,7 +43,7 @@ async function run() {
         core.info(`[update title] [number: ${number}]`);
       }
 
-      if (translateBody == 'true' && !checkIsEn(body)) {
+      if (translateBody == 'true' && containsChinese(body)) {
         const { text: newBody } = await translate(body, { to: 'en' });
         core.info(`[translate] [body out: ${newBody}]`);
         await octokit.issues.createComment({
@@ -64,10 +64,9 @@ async function run() {
   }
 }
 
-function checkIsEn(body) {
-  var en = /^[a-zA-Z0-9. -_?]*$/;
-  const result = en.test(body);
-  core.info(`[CheckIsEn] [${body} is ${result}]`);
+function containsChinese(t) {
+  const result = /[\u4e00-\u9fa5]/.test(t);
+  core.info(`[ContainsChinese Test][${t}] result is ${result}`);
   return result;
 }
 
